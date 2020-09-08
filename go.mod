@@ -9,14 +9,25 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.6.1
 	gopkg.in/yaml.v2 v2.3.0
-	k8s.io/api v0.19.0
-	k8s.io/apimachinery v0.19.0
-	k8s.io/apiserver v0.19.0
-	k8s.io/client-go v0.19.0
-	k8s.io/component-base v0.19.0
-	k8s.io/klog/v2 v2.2.0
-	k8s.io/kubectl v0.19.0
-	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
+	k8s.io/api v0.18.7-rc.0
+	k8s.io/apimachinery v0.18.7-rc.0
+	k8s.io/apiserver v0.17.11
+	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
+	k8s.io/component-base v0.17.11
+	k8s.io/klog/v2 v2.3.0
+	k8s.io/kubectl v0.17.2
+	k8s.io/utils v0.0.0-20200821003339-5e75c0163111
+)
+
+// Overriden by knative.dev/pkg if not pinned.
+replace (
+	k8s.io/api => k8s.io/api v0.17.11
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.17.11
+	k8s.io/apimachinery => k8s.io/apimachinery v0.17.11
+	k8s.io/apiserver => k8s.io/apiserver v0.17.11
+	k8s.io/client-go => k8s.io/client-go v0.17.11
+	k8s.io/component-base => k8s.io/component-base v0.17.11
+	k8s.io/kubectl => k8s.io/kubectl v0.17.11
 )

@@ -20,7 +20,6 @@ limitations under the License.
 package utils
 
 import (
-	"context"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,23 +32,23 @@ import (
 func deleteResource(c clientset.Interface, kind schema.GroupKind, namespace, name string, options metav1.DeleteOptions) error {
 	switch kind {
 	case CoreKind("Pod"):
-		return c.CoreV1().Pods(namespace).Delete(context.TODO(), name, options)
+		return c.CoreV1().Pods(namespace).Delete(name, &options)
 	case CoreKind("ReplicationController"):
-		return c.CoreV1().ReplicationControllers(namespace).Delete(context.TODO(), name, options)
+		return c.CoreV1().ReplicationControllers(namespace).Delete(name, &options)
 	case ExtensionsKind("ReplicaSet"), AppsKind("ReplicaSet"):
-		return c.AppsV1().ReplicaSets(namespace).Delete(context.TODO(), name, options)
+		return c.AppsV1().ReplicaSets(namespace).Delete(name, &options)
 	case ExtensionsKind("Deployment"), AppsKind("Deployment"):
-		return c.AppsV1().Deployments(namespace).Delete(context.TODO(), name, options)
+		return c.AppsV1().Deployments(namespace).Delete(name, &options)
 	case ExtensionsKind("DaemonSet"):
-		return c.AppsV1().DaemonSets(namespace).Delete(context.TODO(), name, options)
+		return c.AppsV1().DaemonSets(namespace).Delete(name, &options)
 	case BatchKind("Job"):
-		return c.BatchV1().Jobs(namespace).Delete(context.TODO(), name, options)
+		return c.BatchV1().Jobs(namespace).Delete(name, &options)
 	case CoreKind("Secret"):
-		return c.CoreV1().Secrets(namespace).Delete(context.TODO(), name, options)
+		return c.CoreV1().Secrets(namespace).Delete(name, &options)
 	case CoreKind("ConfigMap"):
-		return c.CoreV1().ConfigMaps(namespace).Delete(context.TODO(), name, options)
+		return c.CoreV1().ConfigMaps(namespace).Delete(name, &options)
 	case CoreKind("Service"):
-		return c.CoreV1().Services(namespace).Delete(context.TODO(), name, options)
+		return c.CoreV1().Services(namespace).Delete(name, &options)
 	default:
 		return fmt.Errorf("Unsupported kind when deleting: %v", kind)
 	}

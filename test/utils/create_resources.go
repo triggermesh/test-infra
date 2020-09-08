@@ -20,7 +20,6 @@ limitations under the License.
 package utils
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -30,7 +29,6 @@ import (
 
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -73,7 +71,7 @@ func CreatePodWithRetries(c clientset.Interface, namespace string, obj *v1.Pod) 
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().Pods(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().Pods(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -90,7 +88,7 @@ func CreateRCWithRetries(c clientset.Interface, namespace string, obj *v1.Replic
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().ReplicationControllers(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().ReplicationControllers(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -107,7 +105,7 @@ func CreateReplicaSetWithRetries(c clientset.Interface, namespace string, obj *a
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.AppsV1().ReplicaSets(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.AppsV1().ReplicaSets(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -124,7 +122,7 @@ func CreateDeploymentWithRetries(c clientset.Interface, namespace string, obj *a
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.AppsV1().Deployments(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.AppsV1().Deployments(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -141,7 +139,7 @@ func CreateDaemonSetWithRetries(c clientset.Interface, namespace string, obj *ap
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.AppsV1().DaemonSets(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.AppsV1().DaemonSets(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -158,7 +156,7 @@ func CreateJobWithRetries(c clientset.Interface, namespace string, obj *batch.Jo
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.BatchV1().Jobs(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.BatchV1().Jobs(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -175,7 +173,7 @@ func CreateSecretWithRetries(c clientset.Interface, namespace string, obj *v1.Se
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().Secrets(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().Secrets(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -192,7 +190,7 @@ func CreateConfigMapWithRetries(c clientset.Interface, namespace string, obj *v1
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().ConfigMaps(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().ConfigMaps(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -209,7 +207,7 @@ func CreateServiceWithRetries(c clientset.Interface, namespace string, obj *v1.S
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().Services(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().Services(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -226,7 +224,7 @@ func CreateStorageClassWithRetries(c clientset.Interface, obj *storage.StorageCl
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.StorageV1().StorageClasses().Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.StorageV1().StorageClasses().Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -243,7 +241,7 @@ func CreateResourceQuotaWithRetries(c clientset.Interface, namespace string, obj
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().ResourceQuotas(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().ResourceQuotas(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -260,7 +258,7 @@ func CreatePersistentVolumeWithRetries(c clientset.Interface, obj *v1.Persistent
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().PersistentVolumes().Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().PersistentVolumes().Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}
@@ -277,7 +275,7 @@ func CreatePersistentVolumeClaimWithRetries(c clientset.Interface, namespace str
 		return fmt.Errorf("Object provided to create is empty")
 	}
 	createFunc := func() (bool, error) {
-		_, err := c.CoreV1().PersistentVolumeClaims(namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
+		_, err := c.CoreV1().PersistentVolumeClaims(namespace).Create(obj)
 		if err == nil || apierrors.IsAlreadyExists(err) {
 			return true, nil
 		}

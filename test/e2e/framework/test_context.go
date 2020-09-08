@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	cliflag "k8s.io/component-base/cli/flag"
-	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 )
 
@@ -715,9 +714,9 @@ type KubeletConfiguration struct {
 	// The purpose of this format is make sure you have the opportunity to notice if the next release hides additional metrics,
 	// rather than being surprised when they are permanently removed in the release after that.
 	ShowHiddenMetricsForVersion string
-	// Logging specifies the options of logging.
+	// LoggingConfig specifies the options of logging.
 	// Refer [Logs Options](https://github.com/kubernetes/component-base/blob/master/logs/options.go) for more information.
-	Logging componentbaseconfig.LoggingConfiguration
+	LoggingConfig LoggingConfig
 	// EnableSystemLogHandler enables /logs handler.
 	EnableSystemLogHandler bool
 }
@@ -777,4 +776,12 @@ type KubeletAnonymousAuthentication struct {
 	// Requests that are not rejected by another authentication method are treated as anonymous requests.
 	// Anonymous requests have a username of system:anonymous, and a group name of system:unauthenticated.
 	Enabled bool
+}
+
+// LoggingConfig contains logging options
+type LoggingConfig struct {
+	// LoggingFormat Flag specifies the structure of log messages.
+	// default value of loggingFormat is `text`
+	// Refer [Logs Options](https://github.com/kubernetes/component-base/blob/master/logs/options.go) for more information.
+	LoggingFormat string
 }

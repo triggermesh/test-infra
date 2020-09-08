@@ -18,7 +18,6 @@ limitations under the License.
 package metrics
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"sync"
@@ -77,7 +76,7 @@ func NewMetricsGrabber(c clientset.Interface, ec clientset.Interface, kubelets b
 	regKubeScheduler := regexp.MustCompile("kube-scheduler-.*")
 	regKubeControllerManager := regexp.MustCompile("kube-controller-manager-.*")
 
-	podList, err := c.CoreV1().Pods(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{})
+	podList, err := c.CoreV1().Pods(metav1.NamespaceSystem).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +126,7 @@ func (g *Grabber) HasControlPlanePods() bool {
 
 // GrabFromKubelet returns metrics from kubelet
 func (g *Grabber) GrabFromKubelet(nodeName string) (KubeletMetrics, error) {
-	nodes, err := g.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": nodeName}.AsSelector().String()})
+	nodes, err := g.client.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": nodeName}.AsSelector().String()})
 	if err != nil {
 		return KubeletMetrics{}, err
 	}
@@ -263,7 +262,7 @@ func (g *Grabber) Grab() (Collection, error) {
 	}
 	if g.grabFromKubelets {
 		result.KubeletMetrics = make(map[string]KubeletMetrics)
-		nodes, err := g.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		nodes, err := g.client.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
 			errs = append(errs, err)
 		} else {
@@ -290,7 +289,7 @@ func (g *Grabber) getMetricsFromPod(client clientset.Interface, podName string, 
 		SubResource("proxy").
 		Name(fmt.Sprintf("%v:%v", podName, port)).
 		Suffix("metrics").
-		Do(context.TODO()).Raw()
+		Do().Raw()
 	if err != nil {
 		return "", err
 	}

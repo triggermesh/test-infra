@@ -19,7 +19,6 @@ package framework
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -272,15 +271,12 @@ func getOneTimeResourceUsageOnNode(
 
 // getStatsSummary contacts kubelet for the container information.
 func getStatsSummary(c clientset.Interface, nodeName string) (*Summary, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), SingleCallTimeout)
-	defer cancel()
-
 	data, err := c.CoreV1().RESTClient().Get().
 		Resource("nodes").
 		SubResource("proxy").
 		Name(fmt.Sprintf("%v:%v", nodeName, KubeletPort)).
 		Suffix("stats/summary").
-		Do(ctx).Raw()
+		Do().Raw()
 
 	if err != nil {
 		return nil, err
@@ -359,7 +355,7 @@ func nodeHasControlPlanePods(c clientset.Interface, nodeName string) (bool, erro
 	regKubeScheduler := regexp.MustCompile("kube-scheduler-.*")
 	regKubeControllerManager := regexp.MustCompile("kube-controller-manager-.*")
 
-	podList, err := c.CoreV1().Pods(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{
+	podList, err := c.CoreV1().Pods(metav1.NamespaceSystem).List(metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", nodeName).String(),
 	})
 	if err != nil {
@@ -402,7 +398,7 @@ func NewResourceUsageGatherer(c clientset.Interface, options ResourceGathererOpt
 	// Tracks kube-system pods if no valid PodList is passed in.
 	var err error
 	if pods == nil {
-		pods, err = c.CoreV1().Pods("kube-system").List(context.TODO(), metav1.ListOptions{})
+		pods, err = c.CoreV1().Pods("kube-system").List(metav1.ListOptions{})
 		if err != nil {
 			Logf("Error while listing Pods: %v", err)
 			return nil, err
@@ -438,7 +434,7 @@ func NewResourceUsageGatherer(c clientset.Interface, options ResourceGathererOpt
 			dnsNodes[pod.Spec.NodeName] = true
 		}
 	}
-	nodeList, err := c.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	nodeList, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		Logf("Error while listing Nodes: %v", err)
 		return nil, err

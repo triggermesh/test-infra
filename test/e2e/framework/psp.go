@@ -18,9 +18,7 @@ limitations under the License.
 package framework
 
 import (
-	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/onsi/ginkgo"
@@ -33,8 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	clientset "k8s.io/client-go/kubernetes"
-
-	imageutils "github.com/triggermesh/test-infra/test/utils/image"
 
 	// TODO: Remove the following imports (ref: https://github.com/kubernetes/kubernetes/issues/81245)
 	e2eauth "github.com/triggermesh/test-infra/test/e2e/framework/auth"
@@ -93,37 +89,17 @@ func privilegedPSP(name string) *policyv1beta1.PodSecurityPolicy {
 // IsPodSecurityPolicyEnabled returns true if PodSecurityPolicy is enabled. Otherwise false.
 func IsPodSecurityPolicyEnabled(kubeClient clientset.Interface) bool {
 	isPSPEnabledOnce.Do(func() {
-		psps, err := kubeClient.PolicyV1beta1().PodSecurityPolicies().List(context.TODO(), metav1.ListOptions{})
+		psps, err := kubeClient.PolicyV1beta1().PodSecurityPolicies().List(metav1.ListOptions{})
 		if err != nil {
 			Logf("Error listing PodSecurityPolicies; assuming PodSecurityPolicy is disabled: %v", err)
-			return
-		}
-		if psps == nil || len(psps.Items) == 0 {
+			isPSPEnabled = false
+		} else if psps == nil || len(psps.Items) == 0 {
 			Logf("No PodSecurityPolicies found; assuming PodSecurityPolicy is disabled.")
-			return
+			isPSPEnabled = false
+		} else {
+			Logf("Found PodSecurityPolicies; assuming PodSecurityPolicy is enabled.")
+			isPSPEnabled = true
 		}
-		Logf("Found PodSecurityPolicies; testing pod creation to see if PodSecurityPolicy is enabled")
-		testPod := &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{GenerateName: "psp-test-pod-"},
-			Spec:       v1.PodSpec{Containers: []v1.Container{{Name: "test", Image: imageutils.GetPauseImageName()}}},
-		}
-		dryRunPod, err := kubeClient.CoreV1().Pods("kube-system").Create(context.TODO(), testPod, metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}})
-		if err != nil {
-			if strings.Contains(err.Error(), "PodSecurityPolicy") {
-				Logf("PodSecurityPolicy error creating dryrun pod; assuming PodSecurityPolicy is enabled: %v", err)
-				isPSPEnabled = true
-			} else {
-				Logf("Error creating dryrun pod; assuming PodSecurityPolicy is disabled: %v", err)
-			}
-			return
-		}
-		pspAnnotation, pspAnnotationExists := dryRunPod.Annotations["kubernetes.io/psp"]
-		if !pspAnnotationExists {
-			Logf("No PSP annotation exists on dry run pod; assuming PodSecurityPolicy is disabled")
-			return
-		}
-		Logf("PSP annotation exists on dry run pod: %q; assuming PodSecurityPolicy is enabled", pspAnnotation)
-		isPSPEnabled = true
 	})
 	return isPSPEnabled
 }
@@ -139,7 +115,7 @@ func CreatePrivilegedPSPBinding(kubeClient clientset.Interface, namespace string
 	}
 	// Create the privileged PSP & role
 	privilegedPSPOnce.Do(func() {
-		_, err := kubeClient.PolicyV1beta1().PodSecurityPolicies().Get(context.TODO(), podSecurityPolicyPrivileged, metav1.GetOptions{})
+		_, err := kubeClient.PolicyV1beta1().PodSecurityPolicies().Get(podSecurityPolicyPrivileged, metav1.GetOptions{})
 		if !apierrors.IsNotFound(err) {
 			// Privileged PSP was already created.
 			ExpectNoError(err, "Failed to get PodSecurityPolicy %s", podSecurityPolicyPrivileged)
@@ -147,14 +123,14 @@ func CreatePrivilegedPSPBinding(kubeClient clientset.Interface, namespace string
 		}
 
 		psp := privilegedPSP(podSecurityPolicyPrivileged)
-		_, err = kubeClient.PolicyV1beta1().PodSecurityPolicies().Create(context.TODO(), psp, metav1.CreateOptions{})
+		_, err = kubeClient.PolicyV1beta1().PodSecurityPolicies().Create(psp)
 		if !apierrors.IsAlreadyExists(err) {
 			ExpectNoError(err, "Failed to create PSP %s", podSecurityPolicyPrivileged)
 		}
 
 		if e2eauth.IsRBACEnabled(kubeClient.RbacV1()) {
 			// Create the Role to bind it to the namespace.
-			_, err = kubeClient.RbacV1().ClusterRoles().Create(context.TODO(), &rbacv1.ClusterRole{
+			_, err = kubeClient.RbacV1().ClusterRoles().Create(&rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{Name: podSecurityPolicyPrivileged},
 				Rules: []rbacv1.PolicyRule{{
 					APIGroups:     []string{"extensions"},
@@ -162,7 +138,7 @@ func CreatePrivilegedPSPBinding(kubeClient clientset.Interface, namespace string
 					ResourceNames: []string{podSecurityPolicyPrivileged},
 					Verbs:         []string{"use"},
 				}},
-			}, metav1.CreateOptions{})
+			})
 			if !apierrors.IsAlreadyExists(err) {
 				ExpectNoError(err, "Failed to create PSP role")
 			}

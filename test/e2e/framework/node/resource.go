@@ -18,7 +18,6 @@ limitations under the License.
 package node
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -495,7 +494,7 @@ func hasNonblockingTaint(node *v1.Node, nonblockingTaints string) bool {
 func PodNodePairs(c clientset.Interface, ns string) ([]PodNode, error) {
 	var result []PodNode
 
-	podList, err := c.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{})
+	podList, err := c.CoreV1().Pods(ns).List(metav1.ListOptions{})
 	if err != nil {
 		return result, err
 	}
@@ -512,7 +511,7 @@ func PodNodePairs(c clientset.Interface, ns string) ([]PodNode, error) {
 
 // GetClusterZones returns the values of zone label collected from all nodes.
 func GetClusterZones(c clientset.Interface) (sets.String, error) {
-	nodes, err := c.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	nodes, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Error getting nodes while attempting to list cluster zones: %v", err)
 	}
@@ -541,13 +540,13 @@ func CreatePodsPerNodeForSimpleApp(c clientset.Interface, namespace, appName str
 	}
 	for i, node := range nodes.Items {
 		e2elog.Logf("%v/%v : Creating container with label app=%v-pod", i, maxCount, appName)
-		_, err := c.CoreV1().Pods(namespace).Create(context.TODO(), &v1.Pod{
+		_, err := c.CoreV1().Pods(namespace).Create(&v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   fmt.Sprintf(appName+"-pod-%v", i),
 				Labels: podLabels,
 			},
 			Spec: podSpec(node),
-		}, metav1.CreateOptions{})
+		})
 		// TODO use wrapper methods in expect.go after removing core e2e dependency on node
 		gomega.ExpectWithOffset(2, err).NotTo(gomega.HaveOccurred())
 	}
@@ -585,10 +584,10 @@ func addOrUpdateTaintOnNode(c clientset.Interface, nodeName string, taints ...*v
 		// First we try getting node from the API server cache, as it's cheaper. If it fails
 		// we get it from etcd to be sure to have fresh data.
 		if firstTry {
-			oldNode, err = c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{ResourceVersion: "0"})
+			oldNode, err = c.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{ResourceVersion: "0"})
 			firstTry = false
 		} else {
-			oldNode, err = c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+			oldNode, err = c.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		}
 		if err != nil {
 			return err
@@ -697,10 +696,10 @@ func removeNodeTaint(c clientset.Interface, nodeName string, node *v1.Node, tain
 		// First we try getting node from the API server cache, as it's cheaper. If it fails
 		// we get it from etcd to be sure to have fresh data.
 		if firstTry {
-			oldNode, err = c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{ResourceVersion: "0"})
+			oldNode, err = c.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{ResourceVersion: "0"})
 			firstTry = false
 		} else {
-			oldNode, err = c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+			oldNode, err = c.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		}
 		if err != nil {
 			return err
@@ -745,7 +744,7 @@ func patchNodeTaints(c clientset.Interface, nodeName string, oldNode *v1.Node, n
 		return fmt.Errorf("failed to create patch for node %q: %v", nodeName, err)
 	}
 
-	_, err = c.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = c.CoreV1().Nodes().Patch(nodeName, types.StrategicMergePatchType, patchBytes)
 	return err
 }
 
@@ -783,7 +782,7 @@ func deleteTaint(taints []v1.Taint, taintToDelete *v1.Taint) ([]v1.Taint, bool) 
 
 func verifyThatTaintIsGone(c clientset.Interface, nodeName string, taint *v1.Taint) {
 	ginkgo.By("verifying the node doesn't have the taint " + taint.ToString())
-	nodeUpdated, err := c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	nodeUpdated, err := c.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 
 	// TODO use wrapper methods in expect.go after removing core e2e dependency on node
 	gomega.ExpectWithOffset(2, err).NotTo(gomega.HaveOccurred())

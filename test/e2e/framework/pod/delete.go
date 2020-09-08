@@ -18,7 +18,6 @@ limitations under the License.
 package pod
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -41,7 +40,7 @@ const (
 // not existing.
 func DeletePodOrFail(c clientset.Interface, ns, name string) {
 	ginkgo.By(fmt.Sprintf("Deleting pod %s in namespace %s", name, ns))
-	err := c.CoreV1().Pods(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := c.CoreV1().Pods(ns).Delete(name, &metav1.DeleteOptions{})
 	if err != nil && apierrors.IsNotFound(err) {
 		return
 	}
@@ -62,7 +61,7 @@ func DeletePodWithWait(c clientset.Interface, pod *v1.Pod) error {
 // not existing.
 func DeletePodWithWaitByName(c clientset.Interface, podName, podNamespace string) error {
 	e2elog.Logf("Deleting pod %q in namespace %q", podName, podNamespace)
-	err := c.CoreV1().Pods(podNamespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+	err := c.CoreV1().Pods(podNamespace).Delete(podName, &metav1.DeleteOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil // assume pod was already deleted
@@ -95,7 +94,7 @@ func DeletePodsWithGracePeriod(c clientset.Interface, pods []v1.Pod, grace int64
 // DeletePodWithGracePeriodByName deletes a pod by name and namespace. Resilient to the pod not existing.
 func DeletePodWithGracePeriodByName(c clientset.Interface, podName, podNamespace string, grace int64) error {
 	e2elog.Logf("Deleting pod %q in namespace %q", podName, podNamespace)
-	err := c.CoreV1().Pods(podNamespace).Delete(context.TODO(), podName, *metav1.NewDeleteOptions(grace))
+	err := c.CoreV1().Pods(podNamespace).Delete(podName, metav1.NewDeleteOptions(grace))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil // assume pod was already deleted

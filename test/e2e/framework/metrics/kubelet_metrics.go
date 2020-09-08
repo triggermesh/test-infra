@@ -18,7 +18,6 @@ limitations under the License.
 package metrics
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -101,7 +100,7 @@ func (g *Grabber) getMetricsFromNode(nodeName string, kubeletPort int) (string, 
 			SubResource("proxy").
 			Name(fmt.Sprintf("%v:%v", nodeName, kubeletPort)).
 			Suffix("metrics").
-			Do(context.TODO()).Raw()
+			Do().Raw()
 		finished <- struct{}{}
 	}()
 	select {
