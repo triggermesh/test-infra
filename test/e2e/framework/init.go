@@ -14,21 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package framework
 
-import (
-	"testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	_ "github.com/triggermesh/test-infra/test/e2e/framework"
-
-	// test suites
-	_ "github.com/triggermesh/test-infra/test/e2e/sources"
-)
-
-func TestE2e(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E Suite")
+func init() {
+	registerFlags()
 }

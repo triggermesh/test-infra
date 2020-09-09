@@ -14,21 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package framework
 
-import (
-	"testing"
+// Config holds the global configuration of the current test context.
+var Config TestConfig
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	_ "github.com/triggermesh/test-infra/test/e2e/framework"
-
-	// test suites
-	_ "github.com/triggermesh/test-infra/test/e2e/sources"
-)
-
-func TestE2e(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E Suite")
+// TestConfig contains the configuration of a test context.
+type TestConfig struct {
+	// Path to a Kubeconfig file containing credentials to interact with Kubernetes.
+	Kubeconfig string
 }

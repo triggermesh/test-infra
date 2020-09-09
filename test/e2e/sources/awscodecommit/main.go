@@ -18,8 +18,12 @@ package awscodecommit
 
 import (
 	. "github.com/onsi/ginkgo"
+
+	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
 var _ = Describe("AWS CodeCommit source", func() {
+	_ = framework.New("awscodecommit")
+
 	It("succeeds always", func() {})
 })

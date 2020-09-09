@@ -14,21 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
+package framework
 
 import (
-	"testing"
+	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	_ "github.com/triggermesh/test-infra/test/e2e/framework"
-
-	// test suites
-	_ "github.com/triggermesh/test-infra/test/e2e/sources"
+	"github.com/onsi/ginkgo"
 )
 
-func TestE2e(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E Suite")
+// Logf logs the given message.
+func Logf(format string, args ...interface{}) {
+	fmt.Fprintf(ginkgo.GinkgoWriter, format+"\n", args...)
+}
+
+// Failf fails the test with the given message.
+func Failf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+
+	// offset level above caller
+	// e.g. "It(...) -> f -> Fail(..., 2)" will be logged for "It"
+	const offset = 2
+	ginkgo.Fail(msg, offset)
 }
