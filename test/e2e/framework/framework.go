@@ -65,14 +65,14 @@ func (f *Framework) BeforeEach() {
 	// the previous test, etc.
 	f.namespacesToDelete = nil
 
-	ginkgo.By("Creating test REST clients", func() {
+	ginkgo.By("creating test REST clients", func() {
 		restCfg := getRESTConfig()
 		f.clientCfg = restCfg
 		f.KubeClient = getKubeClient(restCfg)
 		f.DynamicClient = getDynamicClient(restCfg)
 	})
 
-	ginkgo.By("Creating test namespace with base name "+f.baseName, func() {
+	ginkgo.By("creating test namespace with base name "+f.baseName, func() {
 		f.UniqueName = createTestNamespace(f).Name
 	})
 }
@@ -85,7 +85,7 @@ func (f *Framework) AfterEach() {
 		deleteNsFuncs := make([]func() error, len(f.namespacesToDelete))
 
 		for i, ns := range f.namespacesToDelete {
-			ginkgo.By("Marking test namespace "+ns.Name+" for deletion", func() {
+			ginkgo.By("marking test namespace "+ns.Name+" for deletion", func() {
 				deleteNsFuncs[i] = func() error {
 					if err := deleteNamespace(f.KubeClient, ns.Name); err != nil {
 						return fmt.Errorf("Failed to delete namespace %q: %v", ns.Name, err)

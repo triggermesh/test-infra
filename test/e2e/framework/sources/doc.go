@@ -14,24 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e
-
-import (
-	"testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	// support client-go's auth providers
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-
-	_ "github.com/triggermesh/test-infra/test/e2e/framework"
-
-	// test suites
-	_ "github.com/triggermesh/test-infra/test/e2e/sources"
-)
-
-func TestE2e(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E Suite")
-}
+// Package sources contains helpers to interact with source objects.
+package sources

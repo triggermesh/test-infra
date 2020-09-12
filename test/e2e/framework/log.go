@@ -29,10 +29,18 @@ func Logf(format string, args ...interface{}) {
 
 // Failf fails the test with the given message.
 func Failf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
+	FailfWithOffset(1, format, args...)
+}
 
-	// offset level above caller
-	// e.g. "It(...) -> f -> Fail(..., 2)" will be logged for "It"
-	const offset = 2
-	ginkgo.Fail(msg, offset)
+// FailfWithOffset fails the test with the given message.
+//
+// The offset argument is used to modify the call-stack offset when computing
+// line numbers. This is useful in helper functions that make assertions so
+// that error messages refer to the calling line in the test, as opposed to the
+// line in the helper function.
+//
+// e.g. "It(...) -> f -> FailfWithOffset(1, ...)" will be logged for "It"
+func FailfWithOffset(offset int, format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	ginkgo.Fail(msg, offset+1)
 }
