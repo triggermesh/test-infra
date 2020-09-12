@@ -17,13 +17,282 @@ limitations under the License.
 package awscodecommit
 
 import (
+	"context"
+	"time"
+
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+
+	duckv1 "knative.dev/pkg/apis/duck/v1"
+
+	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/codecommit"
+	"github.com/aws/aws-sdk-go/service/codecommit/codecommitiface"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
+	e2ecodecommit "github.com/triggermesh/test-infra/test/e2e/framework/aws/codecommit"
+	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
+	"github.com/triggermesh/test-infra/test/e2e/framework/sources"
+)
+
+/* This test suite requires:
+
+   - AWS credentials in whichever form (https://docs.aws.amazon.com/sdk-for-go/api/aws/session/#hdr-Sessions_options_from_Shared_Config)
+   - The name of an AWS region exported in the environment as AWS_REGION
+*/
+
+var sourceAPIVersion = schema.GroupVersion{
+	Group:   "sources.triggermesh.io",
+	Version: "v1alpha1",
+}
+
+const (
+	sourceKind     = "AWSCodeCommitSource"
+	sourceResource = "awscodecommitsources"
 )
 
 var _ = Describe("AWS CodeCommit source", func() {
-	_ = framework.New("awscodecommit")
+	f := framework.New("awscodecommitsource")
 
-	It("succeeds always", func() {})
+	var ns string
+
+	var srcClient dynamic.ResourceInterface
+
+	var repoARN string
+	var awsCreds credentials.Value
+	var sink *duckv1.Destination
+
+	BeforeEach(func() {
+		ns = f.UniqueName
+
+		gvr := sourceAPIVersion.WithResource(sourceResource)
+		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
+	})
+
+	When("a source watches an existing repository branch", func() {
+		var ccClient codecommitiface.CodeCommitAPI
+
+		BeforeEach(func() {
+			By("creating an event sink", func() {
+				sink = sources.CreateEventDisplaySink(f.KubeClient, ns)
+			})
+
+			By("reading AWS credentials", func() {
+				sess := session.Must(session.NewSession())
+				ccClient = codecommit.New(sess)
+				awsCreds = readAWSCredentials(sess)
+			})
+
+			By("creating a CodeCommit repository", func() {
+				repoARN = e2ecodecommit.CreateRepository(ccClient, f)
+			})
+
+			By("creating an AWSCodeCommitSource object", func() {
+				src, err := createSource(srcClient, ns, "test-", sink,
+					withARN(repoARN),
+					withCredentials(awsCreds),
+				)
+				Expect(err).ToNot(HaveOccurred())
+
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+
+				// FIXME(antoineco): without this short pause, the receive adapter throws the following
+				// error when sending the event:
+				//
+				//   Sending CodeCommit event
+				//   Post "http://event-display.{...}": dial tcp 10.x.x.x:80: connect: connection refused
+				//
+				time.Sleep(2 * time.Second)
+			})
+		})
+
+		AfterEach(func() {
+			repoName := parseARN(repoARN).Resource
+
+			By("deleting the CodeCommit repository "+repoName, func() {
+				e2ecodecommit.DeleteRepository(ccClient, repoName)
+			})
+		})
+
+		It("should generate events on selected actions", func() {
+
+			By("creating a Git commit", func() {
+				e2ecodecommit.CreateCommit(ccClient, parseARN(repoARN).Resource)
+			})
+
+			By("waiting for an event to be received", func() {
+				const receiveTimeout = 10 * time.Second
+				const pollInterval = 500 * time.Millisecond
+
+				receivedEvents := func() []string {
+					events := sources.ReceivedEventDisplayEvents(f.KubeClient, ns)
+					framework.Logf("%s", events)
+					return events
+				}
+
+				Eventually(receivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+			})
+		})
+	})
+
+	When("a client creates a source object with invalid specs", func() {
+
+		// Those tests do not require a real repository or sink
+		BeforeEach(func() {
+			repoARN = "arn:aws:codecommit:us-east-2:123456789012:fake-repo"
+
+			awsCreds = credentials.Value{
+				AccessKeyID:     "fake",
+				SecretAccessKey: "fake",
+			}
+
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+		})
+
+		It("should reject the creation of that object", func() {
+
+			By("setting an invalid ARN", func() {
+				invalidARN := "arn:aws:codecommit:invalid::"
+
+				_, err := createSource(srcClient, ns, "test-invalid-arn-", sink,
+					withARN(invalidARN),
+					withCredentials(awsCreds),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("spec.arn: Invalid value: "))
+			})
+
+			By("setting empty credentials", func() {
+				_, err := createSource(srcClient, ns, "test-nocreds-", sink,
+					withARN(repoARN),
+					withCredentials(credentials.Value{}),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`"spec.credentials.accessKeyID" must validate one and only one schema (oneOf).`))
+			})
+
+			By("setting invalid event types", func() {
+				_, err := createSource(srcClient, ns, "test-invalid-eventtypes-", sink,
+					withARN(repoARN),
+					withEventType("invalid"),
+					withCredentials(awsCreds),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.eventTypes: Unsupported value: "invalid"`))
+			})
+		})
+	})
 })
+
+// createSource creates an AWSCodeCommitSource object initialized with the given options.
+func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
+	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
+
+	src := &unstructured.Unstructured{}
+	src.SetAPIVersion(sourceAPIVersion.String())
+	src.SetKind(sourceKind)
+	src.SetNamespace(namespace)
+	src.SetGenerateName(namePrefix)
+
+	if err := unstructured.SetNestedField(src.Object, e2ecodecommit.DefaultBranch, "spec", "branch"); err != nil {
+		framework.FailfWithOffset(2, "Failed to set spec.branch field: %s", err)
+	}
+
+	if err := unstructured.SetNestedMap(src.Object, ducktypes.DestinationToMap(sink), "spec", "sink"); err != nil {
+		framework.FailfWithOffset(2, "Failed to set spec.sink field: %s", err)
+	}
+
+	for _, opt := range opts {
+		opt(src)
+	}
+
+	/* Set some sane defaults
+	 */
+
+	// assume tests act upon "push" events unless specified otherwise
+	_, found, err := unstructured.NestedStringSlice(src.Object, "spec", "eventTypes")
+	if err != nil {
+		framework.FailfWithOffset(2, "Error reading spec.eventTypes field: %s", err)
+	}
+	if !found {
+		withEventType("push")(src)
+	}
+
+	return srcClient.Create(context.Background(), src, metav1.CreateOptions{})
+}
+
+type sourceOption func(*unstructured.Unstructured)
+
+func withARN(arn string) sourceOption {
+	return func(src *unstructured.Unstructured) {
+		if err := unstructured.SetNestedField(src.Object, arn, "spec", "arn"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.arn field: %s", err)
+		}
+	}
+}
+
+func withCredentials(creds credentials.Value) sourceOption {
+	credsMap := map[string]interface{}{
+		"accessKeyID":     map[string]interface{}{},
+		"secretAccessKey": map[string]interface{}{},
+	}
+	if creds.AccessKeyID != "" {
+		credsMap["accessKeyID"] = map[string]interface{}{"value": creds.AccessKeyID}
+	}
+	if creds.SecretAccessKey != "" {
+		credsMap["secretAccessKey"] = map[string]interface{}{"value": creds.SecretAccessKey}
+	}
+
+	return func(src *unstructured.Unstructured) {
+		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "credentials"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.credentials field: %s", err)
+		}
+	}
+}
+
+func withEventType(typ string) sourceOption {
+	return func(src *unstructured.Unstructured) {
+		eventTypes, _, err := unstructured.NestedStringSlice(src.Object, "spec", "eventTypes")
+		if err != nil {
+			framework.FailfWithOffset(3, "Error reading spec.eventTypes field: %s", err)
+		}
+
+		eventTypes = append(eventTypes, typ)
+
+		if err := unstructured.SetNestedStringSlice(src.Object, eventTypes, "spec", "eventTypes"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.eventTypes field: %s", err)
+		}
+	}
+}
+
+func parseARN(arnStr string) arn.ARN {
+	arn, err := arn.Parse(arnStr)
+	if err != nil {
+		framework.FailfWithOffset(2, "Error parsing ARN string %q: %s", arnStr, err)
+	}
+
+	return arn
+}
+
+func readAWSCredentials(sess *session.Session) credentials.Value {
+	creds, err := sess.Config.Credentials.Get()
+	if err != nil {
+		framework.FailfWithOffset(2, "Error reading AWS credentials: %s", err)
+	}
+
+	return creds
+}
