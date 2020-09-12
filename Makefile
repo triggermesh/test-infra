@@ -14,9 +14,9 @@
 
 .PHONY: e2e
 
-E2E_FLAGS        :=
 E2E_PACKAGES     := ./test/e2e
 E2E_PASSTHROUGHS :=
 
+override E2E_FLAGS += -nodes=4 -slowSpecThreshold=20 -randomizeAllSpecs
 e2e:
 	@go run github.com/onsi/ginkgo/ginkgo $(E2E_FLAGS) $(E2E_PACKAGES) -- $(E2E_PASSTHROUGHS)
