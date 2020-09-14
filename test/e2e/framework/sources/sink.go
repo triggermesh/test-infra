@@ -17,9 +17,16 @@ limitations under the License.
 package sources
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"io"
+	"io/ioutil"
 	"strings"
+	"time"
+
+	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/cloudevents/sdk-go/v2/event/datacodec"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -57,7 +64,7 @@ func CreateEventDisplaySink(cli kubernetes.Interface, namespace string) *duckv1.
 
 // ReceivedEventDisplayEvents returns all events received by the instance of
 // event-display in the given namespace.
-func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string) []string {
+func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string) []cloudevents.Event {
 	const delimiter = '☁'
 
 	logStream := deployment.GetLogs(cli, namespace, eventDisplayName)
@@ -102,10 +109,100 @@ func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string) []st
 		return nil
 	}
 
-	events := make([]string, len(eventBuilders))
+	events := make([]cloudevents.Event, len(eventBuilders))
 
 	for i, eb := range eventBuilders {
-		events[i] = eb.String()
+		events[i] = parseCloudEvent(eb.String())
 	}
 	return events
+}
+
+// parseCloudEvent parses the content of a stringified CloudEvent into a
+// structured CloudEvent.
+//
+// Example of output from Event.String():
+//
+// ☁  cloudevents.Event
+// Validation: valid
+// Context Attributes,
+//   specversion: 1.0
+//   type: io.triggermesh.some.event
+//   source: some/source
+//   subject: some-subject
+//   id: edecf007-f651-4e10-959e-e2f0a5b8ccd0
+//   time: 2020-09-14T13:59:40.693213706Z
+//   datacontenttype: application/json
+// Data,
+//   {
+//     ...
+//   }
+func parseCloudEvent(ce string) cloudevents.Event {
+	e := cloudevents.NewEvent()
+
+	contentType := cloudevents.ApplicationJSON
+
+	r := bufio.NewReader(strings.NewReader(ce))
+
+	for {
+		line, err := r.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		// try finding context attributes and data
+		subs := strings.SplitN(line, ":", 2)
+
+		switch len(subs) {
+		case 1:
+			if subs[0] != "Data," {
+				break
+			}
+
+			// read everything that's left to read and set
+			// it as the event's data
+			b, err := ioutil.ReadAll(r)
+			if err != nil {
+				framework.Logf("Error reading event's data: %s", err)
+				break
+			}
+
+			decodedData := make(map[string]interface{})
+
+			if err := datacodec.Decode(context.Background(), e.DataMediaType(), b, &decodedData); err != nil {
+				framework.Logf("Error decoding event's data: %s", err)
+				e.SetData(contentType, b)
+			} else {
+				e.SetData(contentType, decodedData)
+			}
+
+		case 2:
+			switch k, v := subs[0], strings.TrimSpace(subs[1]); k {
+			case "datacontenttype":
+				contentType = v
+				e.SetDataContentType(v)
+			case "type":
+				e.SetType(v)
+			case "source":
+				e.SetSource(v)
+			case "subject":
+				e.SetSubject(v)
+			case "id":
+				e.SetID(v)
+			case "time":
+				t, err := time.Parse(time.RFC3339Nano, v)
+				if err != nil {
+					framework.Logf("Error parsing event's time: %s", err)
+					break
+				}
+				e.SetTime(t)
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			framework.FailfWithOffset(3, "Error reading line from Reader: %s", err)
+		}
+	}
+
+	return e
 }

@@ -36,6 +36,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/codecommit"
 	"github.com/aws/aws-sdk-go/service/codecommit/codecommitiface"
 
+	cloudevents "github.com/cloudevents/sdk-go/v2"
+
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	e2ecodecommit "github.com/triggermesh/test-infra/test/e2e/framework/aws/codecommit"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
@@ -131,13 +133,20 @@ var _ = Describe("AWS CodeCommit source", func() {
 				const receiveTimeout = 10 * time.Second
 				const pollInterval = 500 * time.Millisecond
 
-				receivedEvents := func() []string {
-					events := sources.ReceivedEventDisplayEvents(f.KubeClient, ns)
-					framework.Logf("%s", events)
-					return events
+				var receivedEvents []cloudevents.Event
+
+				readReceivedEvents := func() []cloudevents.Event {
+					receivedEvents = sources.ReceivedEventDisplayEvents(f.KubeClient, ns)
+					return receivedEvents
 				}
 
-				Eventually(receivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+				Expect(receivedEvents).To(HaveLen(1))
+
+				e := receivedEvents[0]
+				Expect(e.Type()).To(Equal("com.amazon.codecommit.push"))
+				Expect(e.Source()).To(Equal(repoARN))
+				Expect(e.Subject()).To(Equal(e2ecodecommit.DefaultBranch))
 			})
 		})
 	})
