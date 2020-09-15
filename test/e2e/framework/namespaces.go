@@ -88,7 +88,7 @@ func createNamespace(c clientset.Interface, baseName string, labels labels.Set) 
 	if err := WaitForDefaultServiceAccountInNamespace(c, createdNs.Name); err != nil {
 		// Even if the serviceAccount creation failed, we still return
 		// the successfully created namespace.
-		Logf("Error waiting for default ServiceAccount creation, ignoring: %v", err)
+		Logf("Error waiting for the creation of the default ServiceAccount, ignoring: %v", err)
 	}
 
 	return createdNs, nil

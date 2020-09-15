@@ -88,11 +88,13 @@ func WaitUntilAvailable(c clientset.Interface, d *appsv1.Deployment) {
 		},
 	}
 
+	gr := schema.GroupResource{Group: "apps", Resource: "deployments"}
+
 	// checks whether the Deployment referenced in the given watch.Event is
 	// available.
 	var isDeploymentAvailable watchtools.ConditionFunc = func(e watch.Event) (bool, error) {
 		if e.Type == watch.Deleted {
-			return false, apierrors.NewNotFound(schema.GroupResource{Resource: "deployments"}, d.Name)
+			return false, apierrors.NewNotFound(gr, d.Name)
 		}
 
 		if d, ok := e.Object.(*appsv1.Deployment); ok {
@@ -107,7 +109,7 @@ func WaitUntilAvailable(c clientset.Interface, d *appsv1.Deployment) {
 
 	_, err := watchtools.UntilWithSync(ctx, lw, &appsv1.Deployment{}, nil, isDeploymentAvailable)
 	if err != nil {
-		framework.FailfWithOffset(2, "Error waiting for Deployment to become available: %s", err)
+		framework.FailfWithOffset(2, "Error waiting for %s %q to become available: %s", gr, d.Name, err)
 	}
 }
 

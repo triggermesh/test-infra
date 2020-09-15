@@ -80,6 +80,7 @@ func WaitUntilReady(cli dynamic.Interface, obj *unstructured.Unstructured) {
 
 	_, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isResourceReady)
 	if err != nil {
-		framework.FailfWithOffset(2, "Error waiting for resource to become ready: %s", err)
+		framework.FailfWithOffset(2, "Error waiting for resource %s %q to become ready: %s",
+			gvr.GroupResource(), obj.GetName(), err)
 	}
 }
