@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sources
+package bridges
 
 import (
 	"bufio"
@@ -29,9 +29,15 @@ import (
 	"github.com/cloudevents/sdk-go/v2/event/datacodec"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+	"knative.dev/pkg/kmeta"
+	"knative.dev/serving/pkg/apis/serving"
+	revisionnames "knative.dev/serving/pkg/reconciler/revision/resources/names"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	"github.com/triggermesh/test-infra/test/e2e/framework/deployment"
@@ -62,17 +68,71 @@ func CreateEventDisplaySink(cli kubernetes.Interface, namespace string) *duckv1.
 	}
 }
 
-// ReceivedEventDisplayEvents returns all events received by the instance of
-// event-display in the given namespace.
-func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string) []cloudevents.Event {
-	const delimiter = '☁'
+// EventDisplayDeploymentName returns the name of the Deployment object
+// managing the event-display application, assuming that Deployment is managed
+// by a Knative Service with the expected default name.
+func EventDisplayDeploymentName(cli dynamic.Interface, namespace string) string {
+	ksvcGVR := serving.ServicesResource.WithVersion("v1")
 
-	logStream := deployment.GetLogs(cli, namespace, eventDisplayName)
+	ksvc, err := cli.Resource(ksvcGVR).Namespace(namespace).Get(context.Background(), eventDisplayName, metav1.GetOptions{})
+	if err != nil {
+		framework.FailfWithOffset(2, "Error getting event-display Knative Service: %s", err)
+	}
+
+	return ksvcDeploymentName(cli, ksvc)
+}
+
+// ksvcDeployment returns the name of the Deployment matching the latest
+// revision of the given Knative Service.
+func ksvcDeploymentName(cli dynamic.Interface, ksvc *unstructured.Unstructured) string {
+	latestRev, found, err := unstructured.NestedString(ksvc.Object, "status", "latestCreatedRevisionName")
+	if err != nil {
+		framework.FailfWithOffset(3, "Error reading status.latestCreatedRevisionName field: %s", err)
+	}
+	if !found {
+		framework.FailfWithOffset(3, "The Knative Service did not report its latestCreatedRevisionName")
+	}
+
+	var rev kmeta.Accessor = &unstructured.Unstructured{}
+	rev.SetName(latestRev)
+
+	return revisionnames.Deployment(rev)
+}
+
+// ReceivedEventDisplayEvents returns all events received by the instance of
+// event-display in the given namespace. An optional Deployment name can be
+// passed to select the Pod events should be read from.
+func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string, deplName ...string) []cloudevents.Event {
+	eventDisplayDeploymentName := eventDisplayName
+	if len(deplName) > 0 {
+		eventDisplayDeploymentName = deplName[0]
+	}
+
+	logStream := deployment.GetLogs(cli, namespace, eventDisplayDeploymentName)
 	defer func() {
 		if err := logStream.Close(); err != nil {
-			framework.FailfWithOffset(2, "Failed to close event-display's log stream: %s", err)
+			framework.FailfWithOffset(3, "Failed to close event-display's log stream: %s", err)
 		}
 	}()
+
+	eventStrings := splitEvents(logStream)
+
+	if len(eventStrings) == 0 {
+		return nil
+	}
+
+	events := make([]cloudevents.Event, len(eventStrings))
+
+	for i, eStr := range eventStrings {
+		events[i] = parseCloudEvent(eStr)
+	}
+
+	return events
+}
+
+// splitEvents parses the given stream into a list of event strings.
+func splitEvents(logStream io.Reader) []string {
+	const delimiter = '☁'
 
 	var buf bytes.Buffer
 
@@ -105,15 +165,12 @@ func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string) []cl
 		}
 	}
 
-	if len(eventBuilders) == 0 {
-		return nil
-	}
-
-	events := make([]cloudevents.Event, len(eventBuilders))
+	events := make([]string, len(eventBuilders))
 
 	for i, eb := range eventBuilders {
-		events[i] = parseCloudEvent(eb.String())
+		events[i] = eb.String()
 	}
+
 	return events
 }
 
@@ -167,7 +224,7 @@ func parseCloudEvent(ce string) cloudevents.Event {
 			decodedData := make(map[string]interface{})
 
 			if err := datacodec.Decode(context.Background(), e.DataMediaType(), b, &decodedData); err != nil {
-				framework.Logf("Error decoding event's data: %s", err)
+				framework.Logf("Error decoding event's data, using raw bytes instead: %s", err)
 				e.SetData(contentType, b)
 			} else {
 				e.SetData(contentType, decodedData)

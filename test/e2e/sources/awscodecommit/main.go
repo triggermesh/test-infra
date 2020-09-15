@@ -40,8 +40,8 @@ import (
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	e2ecodecommit "github.com/triggermesh/test-infra/test/e2e/framework/aws/codecommit"
+	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
-	"github.com/triggermesh/test-infra/test/e2e/framework/sources"
 )
 
 /* This test suite requires:
@@ -83,7 +83,7 @@ var _ = Describe("AWS CodeCommit source", func() {
 
 		BeforeEach(func() {
 			By("creating an event sink", func() {
-				sink = sources.CreateEventDisplaySink(f.KubeClient, ns)
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 			})
 
 			By("reading AWS credentials", func() {
@@ -136,7 +136,7 @@ var _ = Describe("AWS CodeCommit source", func() {
 				var receivedEvents []cloudevents.Event
 
 				readReceivedEvents := func() []cloudevents.Event {
-					receivedEvents = sources.ReceivedEventDisplayEvents(f.KubeClient, ns)
+					receivedEvents = bridges.ReceivedEventDisplayEvents(f.KubeClient, ns)
 					return receivedEvents
 				}
 

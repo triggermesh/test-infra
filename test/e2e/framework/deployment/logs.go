@@ -27,10 +27,9 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-// GetLogs returns the a stream of the logs of the first container in one of
-// the randomly-chosen Pods managed by the Deployment with the given name.
-// Meant to be used with Deployments that have a single replica and a single
-// container.
+// GetLogs returns a stream of the logs of the first container in one of the
+// randomly-chosen Pods managed by the Deployment with the given name. Meant to
+// be used with Deployments that have a single replica and a single container.
 func GetLogs(cli kubernetes.Interface, namespace, deploymentName string) io.ReadCloser {
 	depl, err := cli.AppsV1().Deployments(namespace).Get(context.Background(), deploymentName, metav1.GetOptions{})
 	if err != nil {

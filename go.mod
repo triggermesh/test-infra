@@ -13,7 +13,8 @@ require (
 	k8s.io/apimachinery v0.18.8
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	knative.dev/eventing v0.17.1-0.20200911213100-a44dbdbbcec5
-	knative.dev/pkg v0.0.0-20200911235400-de640e81d149
+	knative.dev/pkg v0.0.0-20200915011641-2e7d80578f25
+	knative.dev/serving v0.17.1-0.20200915040141-6ca1381819e9
 )
 
 // Transitive dependencies of Knative.

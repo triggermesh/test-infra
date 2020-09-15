@@ -59,25 +59,58 @@ func SetComponents(brdg *unstructured.Unstructured, comps []map[string]interface
 // SeekComponentByKind returns the index of the component identified by the
 // given kind in a list of Bridge components.
 func SeekComponentByKind(components []map[string]interface{}, kind string) int /*index*/ {
+	idx := seekComponentByKindAndName(components, kind, "")
+
+	if idx < 0 {
+		framework.FailfWithOffset(3, "No component found in the Bridge for kind %s", kind)
+	}
+
+	return idx
+}
+
+// SeekComponentByKindAndName returns the index of the component identified by
+// the given kind and name in a list of Bridge components.
+func SeekComponentByKindAndName(components []map[string]interface{}, kind, name string) int /*index*/ {
+	idx := seekComponentByKindAndName(components, kind, name)
+
+	if idx < 0 {
+		framework.FailfWithOffset(3, "No component found in the Bridge for kind %s and name %q", kind, name)
+	}
+
+	return idx
+}
+
+func seekComponentByKindAndName(components []map[string]interface{}, kind, name string) int /*index*/ {
 	idx := -1
 
 	for i, c := range components {
 		k, found, err := unstructured.NestedString(c, "object", "kind")
 		if err != nil {
-			framework.FailfWithOffset(3, "Error reading Bridge component's kind: %s", err)
+			framework.FailfWithOffset(4, "Error reading Bridge component's kind: %s", err)
 		}
 		if !found {
-			framework.FailfWithOffset(3, "Found component without kind at index %d", i)
+			framework.FailfWithOffset(4, "Found component without kind at index %d", i)
 		}
 
-		if k == "GitHubSource" {
+		if k == kind {
+			if name != "" {
+				n, found, err := unstructured.NestedString(c, "object", "metadata", "name")
+				if err != nil {
+					framework.FailfWithOffset(4, "Error reading Bridge component's name: %s", err)
+				}
+				if !found {
+					framework.FailfWithOffset(4, "Found component without name at index %d", i)
+				}
+
+				if n != name {
+					continue
+				}
+			}
+
 			idx = i
 			break
 		}
 	}
 
-	if idx < 0 {
-		framework.FailfWithOffset(3, "GitHubSource component was not found in the Bridge")
-	}
 	return idx
 }
