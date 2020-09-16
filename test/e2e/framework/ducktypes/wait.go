@@ -39,18 +39,18 @@ import (
 )
 
 // WaitUntilReady waits until the given resource's status becomes ready.
-func WaitUntilReady(cli dynamic.Interface, obj *unstructured.Unstructured) {
+func WaitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured) *unstructured.Unstructured {
 	fieldSelector := fields.OneTermEqualSelector("metadata.name", obj.GetName()).String()
 	gvr, _ := meta.UnsafeGuessKindToResource(obj.GroupVersionKind())
 
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
-			return cli.Resource(gvr).Namespace(obj.GetNamespace()).List(context.Background(), options)
+			return c.Resource(gvr).Namespace(obj.GetNamespace()).List(context.Background(), options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
-			return cli.Resource(gvr).Namespace(obj.GetNamespace()).Watch(context.Background(), options)
+			return c.Resource(gvr).Namespace(obj.GetNamespace()).Watch(context.Background(), options)
 		},
 	}
 
@@ -78,9 +78,11 @@ func WaitUntilReady(cli dynamic.Interface, obj *unstructured.Unstructured) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	_, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isResourceReady)
+	lastEvent, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isResourceReady)
 	if err != nil {
 		framework.FailfWithOffset(2, "Error waiting for resource %s %q to become ready: %s",
 			gvr.GroupResource(), obj.GetName(), err)
 	}
+
+	return lastEvent.Object.(*unstructured.Unstructured)
 }

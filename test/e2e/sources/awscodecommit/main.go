@@ -27,10 +27,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	clientset "k8s.io/client-go/kubernetes"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 
-	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/codecommit"
@@ -39,6 +39,8 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
+	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
+	"github.com/triggermesh/test-infra/test/e2e/framework/aws"
 	e2ecodecommit "github.com/triggermesh/test-infra/test/e2e/framework/aws/codecommit"
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
@@ -114,7 +116,7 @@ var _ = Describe("AWS CodeCommit source", func() {
 		})
 
 		AfterEach(func() {
-			repoName := parseARN(repoARN).Resource
+			repoName := aws.ParseARN(repoARN).Resource
 
 			By("deleting the CodeCommit repository "+repoName, func() {
 				e2ecodecommit.DeleteRepository(ccClient, repoName)
@@ -124,7 +126,7 @@ var _ = Describe("AWS CodeCommit source", func() {
 		When("an event of a selected type occurs in the repository", func() {
 
 			BeforeEach(func() {
-				e2ecodecommit.CreateCommit(ccClient, parseARN(repoARN).Resource)
+				e2ecodecommit.CreateCommit(ccClient, aws.ParseARN(repoARN).Resource)
 			})
 
 			Specify("the source generates an event", func() {
@@ -133,10 +135,7 @@ var _ = Describe("AWS CodeCommit source", func() {
 
 				var receivedEvents []cloudevents.Event
 
-				readReceivedEvents := func() []cloudevents.Event {
-					receivedEvents = bridges.ReceivedEventDisplayEvents(f.KubeClient, ns)
-					return receivedEvents
-				}
+				readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
 
 				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
 				Expect(receivedEvents).To(HaveLen(1))
@@ -291,15 +290,6 @@ func withEventType(typ string) sourceOption {
 	}
 }
 
-func parseARN(arnStr string) arn.ARN {
-	arn, err := arn.Parse(arnStr)
-	if err != nil {
-		framework.FailfWithOffset(2, "Error parsing ARN string %q: %s", arnStr, err)
-	}
-
-	return arn
-}
-
 func readAWSCredentials(sess *session.Session) credentials.Value {
 	creds, err := sess.Config.Credentials.Get()
 	if err != nil {
@@ -307,4 +297,21 @@ func readAWSCredentials(sess *session.Session) credentials.Value {
 	}
 
 	return creds
+}
+
+// readReceivedEvents returns a function that reads CloudEvents received by the
+// event-display application and stores the result as the value of the given
+// `receivedEvents` variable.
+// The returned function signature satisfies the contract expected by
+// gomega.Eventually: no argument and one or more return values.
+func readReceivedEvents(c clientset.Interface, namespace, eventDisplayDeplName string,
+	receivedEvents *[]cloudevents.Event) func() []cloudevents.Event {
+
+	return func() []cloudevents.Event {
+		ev := bridges.ReceivedEventDisplayEvents(
+			apps.GetLogs(c, namespace, eventDisplayDeplName),
+		)
+		*receivedEvents = ev
+		return ev
+	}
 }

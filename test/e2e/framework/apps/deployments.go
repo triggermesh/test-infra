@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package deployment
+package apps
 
 import (
 	"context"
@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
@@ -40,40 +39,33 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-const (
-	labelAppName   = "app.kubernetes.io/name"
-	labelManagedBy = "app.kubernetes.io/managed-by"
-
-	labelManagedByVal = "e2e-test-suite"
-)
-
 // CreateSimpleApplication is a helper which creates a simple Deployment
 // exposed by a matching Service. `internalPort` is the TCP port number of the
 // container managed by the Deployment. `exposedPort` is the TCP port number
 // exposed by the Service.
-func CreateSimpleApplication(cli kubernetes.Interface, namespace string,
+func CreateSimpleApplication(c clientset.Interface, namespace string,
 	name, image string, internalPort, exposedPort uint16) (*appsv1.Deployment, *corev1.Service) {
 
 	svc := newSimpleService(namespace, name, exposedPort, internalPort)
 
-	svc, err := cli.CoreV1().Services(namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+	svc, err := c.CoreV1().Services(namespace).Create(context.Background(), svc, metav1.CreateOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Failed to create Service: %s", err)
 	}
 
 	depl := newSimpleDeployment(namespace, name, image, internalPort)
 
-	depl, err = cli.AppsV1().Deployments(namespace).Create(context.Background(), depl, metav1.CreateOptions{})
+	depl, err = c.AppsV1().Deployments(namespace).Create(context.Background(), depl, metav1.CreateOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Failed to create Deployment: %s", err)
 	}
 
-	WaitUntilAvailable(cli, depl)
+	WaitUntilAvailable(c, depl)
 
 	return depl, svc
 }
 
-// WaitUntilAvailable waits until the given deployment is available.
+// WaitUntilAvailable waits until the given Deployment becomes available.
 func WaitUntilAvailable(c clientset.Interface, d *appsv1.Deployment) {
 	fieldSelector := fields.OneTermEqualSelector("metadata.name", d.Name).String()
 
@@ -90,8 +82,7 @@ func WaitUntilAvailable(c clientset.Interface, d *appsv1.Deployment) {
 
 	gr := schema.GroupResource{Group: "apps", Resource: "deployments"}
 
-	// checks whether the Deployment referenced in the given watch.Event is
-	// available.
+	// checks whether the Deployment referenced in the given watch.Event is available.
 	var isDeploymentAvailable watchtools.ConditionFunc = func(e watch.Event) (bool, error) {
 		if e.Type == watch.Deleted {
 			return false, apierrors.NewNotFound(gr, d.Name)

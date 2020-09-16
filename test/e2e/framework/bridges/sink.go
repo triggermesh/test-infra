@@ -32,7 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
+	clientset "k8s.io/client-go/kubernetes"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/kmeta"
@@ -40,7 +40,7 @@ import (
 	revisionnames "knative.dev/serving/pkg/reconciler/revision/resources/names"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
-	"github.com/triggermesh/test-infra/test/e2e/framework/deployment"
+	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
 )
 
 const (
@@ -50,11 +50,11 @@ const (
 
 // CreateEventDisplaySink creates an event-display event sink and returns it as
 // a duckv1.Destination.
-func CreateEventDisplaySink(cli kubernetes.Interface, namespace string) *duckv1.Destination {
+func CreateEventDisplaySink(c clientset.Interface, namespace string) *duckv1.Destination {
 	const internalPort uint16 = 8080
 	const exposedPort uint16 = 80
 
-	_, svc := deployment.CreateSimpleApplication(cli, namespace,
+	_, svc := apps.CreateSimpleApplication(c, namespace,
 		eventDisplayName, eventDisplayContainerImage, internalPort, exposedPort)
 
 	svcGVK := corev1.SchemeGroupVersion.WithKind("Service")
@@ -71,20 +71,20 @@ func CreateEventDisplaySink(cli kubernetes.Interface, namespace string) *duckv1.
 // EventDisplayDeploymentName returns the name of the Deployment object
 // managing the event-display application, assuming that Deployment is managed
 // by a Knative Service with the expected default name.
-func EventDisplayDeploymentName(cli dynamic.Interface, namespace string) string {
+func EventDisplayDeploymentName(c dynamic.Interface, namespace string) string {
 	ksvcGVR := serving.ServicesResource.WithVersion("v1")
 
-	ksvc, err := cli.Resource(ksvcGVR).Namespace(namespace).Get(context.Background(), eventDisplayName, metav1.GetOptions{})
+	ksvc, err := c.Resource(ksvcGVR).Namespace(namespace).Get(context.Background(), eventDisplayName, metav1.GetOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Error getting event-display Knative Service: %s", err)
 	}
 
-	return ksvcDeploymentName(cli, ksvc)
+	return ksvcDeploymentName(c, ksvc)
 }
 
 // ksvcDeployment returns the name of the Deployment matching the latest
 // revision of the given Knative Service.
-func ksvcDeploymentName(cli dynamic.Interface, ksvc *unstructured.Unstructured) string {
+func ksvcDeploymentName(c dynamic.Interface, ksvc *unstructured.Unstructured) string {
 	latestRev, found, err := unstructured.NestedString(ksvc.Object, "status", "latestCreatedRevisionName")
 	if err != nil {
 		framework.FailfWithOffset(3, "Error reading status.latestCreatedRevisionName field: %s", err)
@@ -99,16 +99,9 @@ func ksvcDeploymentName(cli dynamic.Interface, ksvc *unstructured.Unstructured) 
 	return revisionnames.Deployment(rev)
 }
 
-// ReceivedEventDisplayEvents returns all events received by the instance of
-// event-display in the given namespace. An optional Deployment name can be
-// passed to select the Pod events should be read from.
-func ReceivedEventDisplayEvents(cli kubernetes.Interface, namespace string, deplName ...string) []cloudevents.Event {
-	eventDisplayDeploymentName := eventDisplayName
-	if len(deplName) > 0 {
-		eventDisplayDeploymentName = deplName[0]
-	}
-
-	logStream := deployment.GetLogs(cli, namespace, eventDisplayDeploymentName)
+// ReceivedEventDisplayEvents returns all events found in the given
+// event-display log stream.
+func ReceivedEventDisplayEvents(logStream io.ReadCloser) []cloudevents.Event {
 	defer func() {
 		if err := logStream.Close(); err != nil {
 			framework.FailfWithOffset(3, "Failed to close event-display's log stream: %s", err)

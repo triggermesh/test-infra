@@ -28,13 +28,14 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
+	clientset "k8s.io/client-go/kubernetes"
 
 	"github.com/google/go-github/v32/github"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
+	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
 	e2egithub "github.com/triggermesh/test-infra/test/e2e/framework/github"
@@ -210,7 +211,7 @@ func withAPITokenSecret(secretName, apiTokenKey string) bridgeOption {
 }
 
 // createAPITokenSecret creates a Kubernetes Secret containing a GitHub API token.
-func createAPITokenSecret(cli kubernetes.Interface, namespace, tokenKey, tokenVal string) *corev1.Secret {
+func createAPITokenSecret(c clientset.Interface, namespace, tokenKey, tokenVal string) *corev1.Secret {
 	secr := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    namespace,
@@ -223,7 +224,7 @@ func createAPITokenSecret(cli kubernetes.Interface, namespace, tokenKey, tokenVa
 
 	var err error
 
-	secr, err = cli.CoreV1().Secrets(namespace).Create(context.Background(), secr, metav1.CreateOptions{})
+	secr, err = c.CoreV1().Secrets(namespace).Create(context.Background(), secr, metav1.CreateOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Failed to create Secret: %s", err)
 	}
@@ -236,11 +237,13 @@ func createAPITokenSecret(cli kubernetes.Interface, namespace, tokenKey, tokenVa
 // `receivedEvents` variable.
 // The returned function signature satisfies the contract expected by
 // gomega.Eventually: no argument and one or more return values.
-func readReceivedEvents(cli kubernetes.Interface, namespace, eventDisplayDeplName string,
+func readReceivedEvents(c clientset.Interface, namespace, eventDisplayDeplName string,
 	receivedEvents *[]cloudevents.Event) func() []cloudevents.Event {
 
 	return func() []cloudevents.Event {
-		ev := bridges.ReceivedEventDisplayEvents(cli, namespace, eventDisplayDeplName)
+		ev := bridges.ReceivedEventDisplayEvents(
+			apps.GetLogs(c, namespace, eventDisplayDeplName),
+		)
 		*receivedEvents = ev
 		return ev
 	}
