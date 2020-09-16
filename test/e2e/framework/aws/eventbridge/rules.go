@@ -25,6 +25,7 @@ import (
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	e2eaws "github.com/triggermesh/test-infra/test/e2e/framework/aws"
+	"github.com/triggermesh/test-infra/test/e2e/framework/aws/iam"
 )
 
 // CreateRule creates a rule named after the given framework.Framework.
@@ -130,4 +131,15 @@ func SetRuleTarget(ebClient eventbridgeiface.EventBridgeAPI, targetARN, ruleName
 	if _, err := ebClient.PutTargets(trgt); err != nil {
 		framework.FailfWithOffset(2, "Failed to set target on rule %q: %s", *trgt.Rule, err)
 	}
+}
+
+// NewEventBridgeToSQSPolicyStatement returns an IAM Policy Statement that
+// allows messages matching the given rule to be sent to the given SQS queue.
+func NewEventBridgeToSQSPolicyStatement(ruleARN, queueARN string) iam.PolicyStatement {
+	return iam.NewPolicyStatement(iam.EffectAllow,
+		iam.PrincipalService("events.amazonaws.com"),
+		iam.ConditionArnEquals("aws:SourceArn", ruleARN),
+		iam.Action("sqs:SendMessage"),
+		iam.Resource(queueARN),
+	)
 }
