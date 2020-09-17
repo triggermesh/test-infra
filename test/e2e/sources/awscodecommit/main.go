@@ -78,18 +78,16 @@ var _ = Describe("AWS CodeCommit source", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 	})
 
-	When("a source watches an existing repository branch", func() {
+	Context("a source watches an existing repository branch", func() {
 		var ccClient codecommitiface.CodeCommitAPI
 
 		BeforeEach(func() {
+			sess := session.Must(session.NewSession())
+			ccClient = codecommit.New(sess)
+			awsCreds = readAWSCredentials(sess)
+
 			By("creating an event sink", func() {
 				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-			})
-
-			By("reading AWS credentials", func() {
-				sess := session.Must(session.NewSession())
-				ccClient = codecommit.New(sess)
-				awsCreds = readAWSCredentials(sess)
 			})
 
 			By("creating a CodeCommit repository", func() {
@@ -123,13 +121,13 @@ var _ = Describe("AWS CodeCommit source", func() {
 			})
 		})
 
-		It("should generate events on selected actions", func() {
+		When("an event of a selected type occurs in the repository", func() {
 
-			By("creating a Git commit", func() {
+			BeforeEach(func() {
 				e2ecodecommit.CreateCommit(ccClient, parseARN(repoARN).Resource)
 			})
 
-			By("waiting for an event to be received", func() {
+			Specify("the source generates an event", func() {
 				const receiveTimeout = 10 * time.Second
 				const pollInterval = 500 * time.Millisecond
 
@@ -171,7 +169,12 @@ var _ = Describe("AWS CodeCommit source", func() {
 			}
 		})
 
-		It("should reject the creation of that object", func() {
+		// Here we use
+		//   "Specify: the API server rejects ..., By: setting an invalid ..."
+		// instead of
+		//   "When: it sets an invalid ..., Specify: the API server rejects ..."
+		// to avoid creating a namespace for each spec, due to their simplicity.
+		Specify("the API server rejects the creation of that object", func() {
 
 			By("setting an invalid ARN", func() {
 				invalidARN := "arn:aws:codecommit:invalid::"
