@@ -300,8 +300,9 @@ Similarly to closure variables, `BeforeEach` blocks are typically defined at the
 `Context` or `When` block.
 
 **:information_source: In the context of our framework, a new instance of `framework.Framework`, and therefore a new
-Kubernetes namespace, is created for each `It` block. Consider this when writing tests that create API objects which
-take a long time to set up.**
+Kubernetes namespace, is created for each `It` block.** Consider this when writing tests that create API objects which
+take a long time to set up. Here is an [example test][optimized-test] optimized to run each of its specs in the same
+namespace.
 
 #### Fail within helpers
 
@@ -358,6 +359,7 @@ The benefits of this approach become more obvious when the complexity of test sc
 
 [ginkgo-docs]: https://onsi.github.io/ginkgo/
 [ginkgo-struct]: https://onsi.github.io/ginkgo/#structuring-your-specs
+[optimized-test]: https://github.com/triggermesh/test-infra/blob/956c8ce257/test/e2e/sources/awscodecommit/main.go#L172-L188
 
 [k8s-e2e]: https://godoc.org/k8s.io/kubernetes/test/e2e
 [sigtesting-howto]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-testing/writing-good-e2e-tests.md
