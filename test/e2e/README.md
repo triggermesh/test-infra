@@ -4,8 +4,6 @@ This is the entry point of the TriggerMesh E2E test suite.
 
 ## Contents
 
-- [End-to-end test suite](#end-to-end-test-suite)
-  - [Contents](#contents)
   - [Overview](#overview)
   - [Running tests](#running-tests)
     - [Execution](#execution)
