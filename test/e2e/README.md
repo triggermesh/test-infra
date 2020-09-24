@@ -4,14 +4,19 @@ This is the entry point of the TriggerMesh E2E test suite.
 
 ## Contents
 
-1. [Overview](#overview)
-1. [Running tests](#running-tests)
-   * [Execution](#execution)
-   * [Inputs](#inputs)
-1. [Package organization](#package-organization)
-1. [Writing tests](#writing-tests)
-   * [Structure](#structure)
-   * [Best practices](#best-practices)
+- [End-to-end test suite](#end-to-end-test-suite)
+  - [Contents](#contents)
+  - [Overview](#overview)
+  - [Running tests](#running-tests)
+    - [Execution](#execution)
+    - [Inputs](#inputs)
+  - [Package organization](#package-organization)
+  - [Writing tests](#writing-tests)
+    - [Structure](#structure)
+    - [Best practices](#best-practices)
+      - [Scoped variables](#scoped-variables)
+      - [Scoped setup with `BeforeEach`](#scoped-setup-with-beforeeach)
+      - [Fail within helpers](#fail-within-helpers)
 
 ## Overview
 
@@ -39,8 +44,7 @@ go run github.com/onsi/ginkgo/ginkgo
 ginkgo
 ```
 
-The `e2e` Make goal, available at the root of this repository, wraps the above command together with sane default
-settings.
+The `e2e` Make goal, available at the root of this repository, wraps the above command together with sane default settings. If the location of the `kubeconfig` file lies in a directory outside of the default,`/$USER/.kube/config`, the Makefile will need to be updated with it's location.
 
 ### Inputs
 
