@@ -14,6 +14,12 @@
 
 .PHONY: e2e
 
+# Un-comment and populate the below section with valid user-data 
+# export GITHUB_API_TOKEN= '<GITHUB_PERSONAL_ACCESS_TOKEN>'
+# export AWS_REGION= '<AWS_REGION>'
+# export AWS_ACCESS_KEY_ID= '<AWS_KEY_ID>'
+# export AWS_SECRET_ACCESS_KEY= '<AWS_SECRET_KEY>'
+
 E2E_PACKAGES     := ./test/e2e
 E2E_PASSTHROUGHS := -e2e.kubeconfig=/Users/${USER}/.kube/config  
 

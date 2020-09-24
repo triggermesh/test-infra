@@ -66,6 +66,8 @@ Below is an example of such documentation:
 */
 ```
 
+The `Makefile` also outlines the required environment variables.
+
 ## Package organization
 
 Each subdirectory of the `test/e2e` package contains a series of tests organized by category (e.g. _Sources_, _Targets_,
