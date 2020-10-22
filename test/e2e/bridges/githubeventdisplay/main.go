@@ -95,6 +95,12 @@ var _ = Describe("GitHub to Event-Display", func() {
 			)
 			Expect(err).ToNot(HaveOccurred())
 
+			// FIXME(antoineco): the Bridge occasionally report "Ready" although its children (e.g. Knative
+			// Services) have an empty status, so we need to give those children some time to report
+			// "Unknown" and let the Bridge acknowledge the update.
+			// Ref. triggermesh/triggerflow#117
+			time.Sleep(3 * time.Second)
+
 			ducktypes.WaitUntilReady(f.DynamicClient, brdg)
 
 			eventDisplayDeplName = bridges.EventDisplayDeploymentName(f.DynamicClient, ns)
