@@ -27,6 +27,9 @@ tasks executed automatically before and after each of these specs.
 
 ### Execution
 
+| :warning: Do not ever interrupt running tests with `Ctrl-C`. When interrupted, Ginkgo only triggers the global `AfterSuite` logic and skips all the individual `AfterEach` blocks declared in running tests. This can leave dangling resources behind that are tedious to clean up manually and can become costly if not terminated quickly. Ref. [onsi/ginkgo#222][ginkgo-issue222].
+| :--- |
+
 While it is possible to run tests using `go test` like standard unit tests, it is recommended to use the `ginkgo` CLI
 tool for running Ginkgo test suites, which offers better control over Gingko-specific parameters, such as the
 parallelism of test specs, the format and verbosity of the reporter's output, etc.
@@ -358,6 +361,7 @@ The benefits of this approach become more obvious when the complexity of test sc
 
 
 [ginkgo-docs]: https://onsi.github.io/ginkgo/
+[ginkgo-issue222]: https://github.com/onsi/ginkgo/issues/222
 [ginkgo-struct]: https://onsi.github.io/ginkgo/#structuring-your-specs
 [optimized-test]: https://github.com/triggermesh/test-infra/blob/956c8ce257/test/e2e/sources/awscodecommit/main.go#L172-L188
 
