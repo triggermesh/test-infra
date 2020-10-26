@@ -15,7 +15,7 @@
 .PHONY: e2e
 
 E2E_PACKAGES     := ./test/e2e
-E2E_PASSTHROUGHS :=
+E2E_PASSTHROUGHS ?=
 
 override E2E_FLAGS += -nodes=4 -slowSpecThreshold=60 -randomizeAllSpecs
 e2e:

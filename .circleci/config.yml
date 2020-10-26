@@ -1,0 +1,100 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@1.4.0
+  gcp-gke: circleci/gcp-gke@1.1.0
+  slack: circleci/slack@4.0.2
+
+jobs:
+  e2e:
+    executor:
+      name: go/default
+      tag: '1.15'
+    steps:
+      - checkout
+      - go/mod-download-cached
+      - gcp-gke/update-kubeconfig-with-credentials:
+          perform-login: true
+          cluster: $GOOGLE_CLUSTER_NAME
+      - run:
+          name: Running e2e tests
+          command: |
+            E2E_PASSTHROUGHS="-e2e.kubeconfig=${HOME}/.kube/config" make e2e
+      - slack/notify:
+          event: fail
+          branch_pattern: main
+          mentions: "@engineering"
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":warning: Your job *${CIRCLE_PROJECT_REPONAME}/${CIRCLE_JOB}* has failed :bomb:\\ncc ${SLACK_PARAM_MENTIONS}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Job"
+                      },
+                      "url": "${CIRCLE_BUILD_URL}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Commit"
+                      },
+                      "url": "https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/commit/${CIRCLE_SHA1}"
+                    }
+                  ]
+                }
+              ]
+            }
+
+workflows:
+  version: 2
+
+  staging:
+    jobs:
+      - e2e:
+          name: e2e-staging
+          context: staging
+
+  prod:
+    jobs:
+      - e2e:
+          name: e2e-prod
+          context: production
+
+  staging-nightly:
+    jobs:
+      - e2e:
+          name: e2e-staging-nightly
+          context: staging
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+
+  prod-nightly:
+    jobs:
+      - e2e:
+          name: e2e-prod-nightly
+          context: production
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
