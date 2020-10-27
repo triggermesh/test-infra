@@ -117,6 +117,7 @@ var _ = Describe("GitHub to Event-Display", func() {
 			// time this event is sent, readReceivedEvents will return one result, which we need to discard
 			// in subsequent assertions.
 
+			time.Sleep(2 * time.Second) // account for some in-cluster latency
 			readReceivedEvents(f.KubeClient, ns, eventDisplayDeplName, &receivedEvents)()
 
 			Expect(receivedEvents).To(SatisfyAny(BeEmpty(), HaveLen(1)),
