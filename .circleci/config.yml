@@ -84,7 +84,7 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - main
 
   prod-nightly:
     jobs:
@@ -97,4 +97,4 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - main
