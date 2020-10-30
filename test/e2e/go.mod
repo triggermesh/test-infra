@@ -1,4 +1,4 @@
-module github.com/triggermesh/test-infra
+module github.com/triggermesh/test-infra/test/e2e
 
 go 1.15
 

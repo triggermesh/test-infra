@@ -12,14 +12,15 @@ jobs:
       tag: '1.15'
     steps:
       - checkout
-      - go/mod-download-cached
       - gcp-gke/update-kubeconfig-with-credentials:
           perform-login: true
           cluster: $GOOGLE_CLUSTER_NAME
       - run:
           name: Running e2e tests
+          environment:
+            E2E_PASSTHROUGHS: "-e2e.kubeconfig=${HOME}/.kube/config"
           command: |
-            E2E_PASSTHROUGHS="-e2e.kubeconfig=${HOME}/.kube/config" make e2e
+            make -C test/e2e e2e
       - slack/notify:
           event: fail
           branch_pattern: main
