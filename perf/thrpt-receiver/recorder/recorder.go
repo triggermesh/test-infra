@@ -112,3 +112,21 @@ func (r *AsyncEventRecorder) Recorded() EventStore {
 
 	return r.recordedEvents
 }
+
+// QueueProfiler wraps the QueueLength method.
+type QueueProfiler interface {
+	// QueueLength returns the current length of a recorder's receive queue.
+	QueueLength() int
+}
+
+var _ QueueProfiler = (*AsyncEventRecorder)(nil)
+
+// QueueLength implements QueueProfiler.
+// This call is not thread-safe because multiple writers send concurrently to
+// the queue while we read its length, but the returned value should be
+// accurate enough to get a rough estimate of how the system is coping with the
+// flow.
+// https://groups.google.com/g/golang-nuts/c/yQw1Wx6BoUU/m/7z83a1MZEAAJ
+func (r *AsyncEventRecorder) QueueLength() int {
+	return len(r.receivedCh)
+}

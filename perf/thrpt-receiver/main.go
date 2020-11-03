@@ -28,6 +28,7 @@ import (
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/google/mako/go/quickstore"
 	"github.com/sethvargo/go-signalcontext"
 	"knative.dev/pkg/test/mako"
 
@@ -39,7 +40,10 @@ const (
 	defaultRecheckPeriod           = 5 * time.Second
 	defaultConsecutiveQuietPeriods = 2
 
+	queueLengthPollPeriod = 100 * time.Millisecond
+
 	makoKeyReceiveThroughput = "rt"
+	makoKeyQueueLength       = "q"
 )
 
 func main() {
@@ -54,6 +58,7 @@ type cmdOpts struct {
 	recheckPeriod           *time.Duration
 	consecutiveQuietPeriods *uint
 	estimatedTotalEvents    *uint
+	enableProfiling         *bool
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
@@ -123,6 +128,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	log.Printf("Event received, waiting until no more event is being recorded for %d consecutive periods of %s",
 		*opts.consecutiveQuietPeriods, *opts.recheckPeriod)
+
+	if *opts.enableProfiling {
+		wg.Add(1)
+		go runQueueProfiler(rcvCtx, makoCli.Quickstore, rec, wg.Done)
+	}
+
 	waitUntilNoMoreRecordedEvent(ctx, rec, *opts.recheckPeriod, *opts.consecutiveQuietPeriods)
 
 	rcvCancel()
@@ -157,6 +168,9 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 	opts.estimatedTotalEvents = f.Uint("estimated-total-events", recorder.DefaultStoreSize,
 		"Estimated total number of events to receive. Used to pre-allocate memory.")
 
+	opts.enableProfiling = f.Bool("profiling", false,
+		"Periodically publish the length of the receive queue to Mako.")
+
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, err
 	}
@@ -182,6 +196,31 @@ func runHandler(ctx context.Context, h *handler.Handler, doneFn func()) {
 		log.Panic("Failure during runtime of CloudEvents handler: %w", err)
 	}
 	log.Print("Stopped CloudEvents handler")
+}
+
+// runQueueProfiler runs a routine that periodically reports the length of the
+// EventRecorder's receive queue to Mako.
+func runQueueProfiler(ctx context.Context, q *quickstore.Quickstore, qp recorder.QueueProfiler, doneFn func()) {
+	defer doneFn()
+
+	ticker := time.NewTicker(queueLengthPollPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-ticker.C:
+			err := q.AddSamplePoint(
+				mako.XTime(time.Now()),
+				map[string]float64{makoKeyQueueLength: float64(qp.QueueLength())},
+			)
+			if err != nil {
+				log.Print("[error] Sampling queue length in Mako: ", err)
+			}
+		}
+	}
 }
 
 // waitForFirstEvent polls the given EventRecorder untils at least one event

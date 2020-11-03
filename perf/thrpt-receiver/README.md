@@ -9,6 +9,8 @@ Usage of thrpt-receiver:
         Consecutive recheck-period after which data is aggregated if no new event has been recorded. (default 2)
   -estimated-total-events uint
         Estimated total number of events to receive. Used to pre-allocate memory. (default 100)
+  -profiling
+        Periodically publish the length of the receive queue to Mako.
   -recheck-period duration
         Frequency at which the recording of new events is being checked. (default 5s)
 ```

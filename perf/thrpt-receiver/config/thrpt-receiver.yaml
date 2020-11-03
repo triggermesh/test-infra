@@ -159,3 +159,7 @@ data:
       value_key: "rt"
       label: "receive-throughput"
     }
+    metric_info_list: {
+      value_key: "q"
+      label: "queue-length"
+    }
