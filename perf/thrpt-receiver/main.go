@@ -53,7 +53,13 @@ const (
 )
 
 func main() {
-	if err := run(os.Args, os.Stdout, os.Stderr); err != nil {
+	// Reset os.Args to fix an issue where Mako's Quickstore.Store() method
+	// hijacks command-line flags and throws "flag provided but not
+	// defined" when any argument is passed to the command.
+	args := os.Args
+	os.Args = os.Args[:1]
+
+	if err := run(args, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running command: %s\n", err)
 		os.Exit(1)
 	}
