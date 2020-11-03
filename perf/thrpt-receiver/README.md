@@ -10,7 +10,7 @@ Usage of thrpt-receiver:
   -estimated-total-events uint
         Estimated total number of events to receive. Used to pre-allocate memory. (default 100)
   -profiling
-        Periodically publish the length of the receive queue to Mako.
+        Periodically publish the length of the receive queue to Mako and enable a pprof server on port 8008.
   -recheck-period duration
         Frequency at which the recording of new events is being checked. (default 5s)
 ```

@@ -22,10 +22,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
+
+	_ "net/http/pprof"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/mako/go/quickstore"
@@ -44,6 +48,8 @@ const (
 
 	makoKeyReceiveThroughput = "rt"
 	makoKeyQueueLength       = "q"
+
+	pprofPort uint16 = 8008
 )
 
 func main() {
@@ -74,6 +80,19 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	ctx, cancel := signalcontext.OnInterrupt()
 	defer cancel()
+
+	var pprofSrvErrCh chan error
+	if *opts.enableProfiling {
+		pprofSrvErrCh = make(chan error)
+		defer close(pprofSrvErrCh)
+
+		addr := ":" + strconv.FormatUint(uint64(pprofPort), 10)
+		log.Print("Running pprof server at address ", addr)
+
+		go func() {
+			pprofSrvErrCh <- runProfilingServer(ctx, addr)
+		}()
+	}
 
 	cli, err := cloudevents.NewDefaultClient()
 	if err != nil {
@@ -119,6 +138,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case <-ctx.Done(): // early container termination
 		cancel()
 		wg.Wait()
+
+		if pprofSrvErrCh != nil {
+			return <-pprofSrvErrCh
+		}
 		return nil
 
 	case <-eventRcvd:
@@ -152,6 +175,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("storing published values in Mako: %w", err)
 	}
 
+	if pprofSrvErrCh != nil {
+		cancel()
+		return <-pprofSrvErrCh
+	}
+
 	return nil
 }
 
@@ -169,7 +197,8 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 		"Estimated total number of events to receive. Used to pre-allocate memory.")
 
 	opts.enableProfiling = f.Bool("profiling", false,
-		"Periodically publish the length of the receive queue to Mako.")
+		"Periodically publish the length of the receive queue to Mako and enable a pprof server on port "+
+			strconv.FormatUint(uint64(pprofPort), 10)+".")
 
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, err
@@ -196,6 +225,37 @@ func runHandler(ctx context.Context, h *handler.Handler, doneFn func()) {
 		log.Panic("Failure during runtime of CloudEvents handler: %w", err)
 	}
 	log.Print("Stopped CloudEvents handler")
+}
+
+// runProfilingServer runs a HTTP server that serves pprof's handlers at /debug/pprof/.
+func runProfilingServer(ctx context.Context, addr string) error {
+	srv := http.Server{
+		Addr: addr,
+	}
+
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		errCh <- srv.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutting down pprof server: %w", err)
+		}
+		log.Print("Stopped pprof server")
+
+	case err := <-errCh:
+		if err != http.ErrServerClosed {
+			return fmt.Errorf("running pprof server: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // runQueueProfiler runs a routine that periodically reports the length of the

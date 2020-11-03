@@ -95,6 +95,8 @@ spec:
     ports:
     - name: cloudevents
       containerPort: 8080
+    - name: pprof
+      containerPort: 8008
     volumeMounts:
     - name: &mako config-mako
       mountPath: /etc/config-mako
