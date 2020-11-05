@@ -23,15 +23,15 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: &app perf-thrpt-receiver
+  name: &ns perf-thrpt-receiver
 subjects:
 - kind: ServiceAccount
-  name: *app
-  namespace: *app
+  name: thrpt-receiver
+  namespace: *ns
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: *app
+  name: *ns
 
 ---
 
@@ -49,16 +49,16 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: &app perf-thrpt-receiver
-  namespace: *app
+  name: thrpt-receiver
+  namespace: perf-thrpt-receiver
 
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: &app perf-thrpt-receiver
-  namespace: *app
+  name: &app thrpt-receiver
+  namespace: perf-thrpt-receiver
 spec:
   selector:
     app: *app
@@ -72,8 +72,8 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: &app perf-thrpt-receiver
-  namespace: *app
+  name: &app thrpt-receiver
+  namespace: perf-thrpt-receiver
   labels:
     app: *app
 spec:
