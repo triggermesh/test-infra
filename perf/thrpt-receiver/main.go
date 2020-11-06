@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -167,6 +168,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	rcvCancel()
 	wg.Wait()
+
+	// force a garbage collection to ensure some memory is released before
+	// storing results to Mako
+	if os.Getenv("GOGC") == "off" {
+		runtime.GC()
+	}
 
 	log.Print("Received events count: ", len(rec.Recorded()))
 
