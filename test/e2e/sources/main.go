@@ -18,4 +18,5 @@ package sources
 
 import (
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awscodecommit"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssqs"
 )
