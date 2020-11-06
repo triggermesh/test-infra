@@ -20,7 +20,7 @@ To compile the tool from source for your current platform and architecture and r
 
 * generate the `sqssend` binary in the current directory with [`go build .`][go-build], then execute it with `./sqssend
   [arguments...]`
-* combine compilation and execution in a temporary directory with [`go run . [arguments...]`][go-run].
+* combine compilation and execution in a temporary directory with [`go run . [arguments...]`][go-run]
 
 [go-build]: https://golang.org/cmd/go/#hdr-Compile_packages_and_dependencies
 [go-run]: https://golang.org/cmd/go/#hdr-Compile_and_run_Go_program
