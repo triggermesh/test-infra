@@ -33,8 +33,10 @@ import (
 	_ "net/http/pprof"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
-	"github.com/google/mako/go/quickstore"
+	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
 	"github.com/sethvargo/go-signalcontext"
+
+	"github.com/google/mako/go/quickstore"
 	"knative.dev/pkg/test/mako"
 
 	"thrpt-receiver/handler"
@@ -101,7 +103,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}()
 	}
 
-	cli, err := cloudevents.NewDefaultClient()
+	cli, err := cloudeventsClient(*opts.recheckPeriod)
 	if err != nil {
 		return fmt.Errorf("creating CloudEvents client: %w", err)
 	}
@@ -218,6 +220,22 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 	}
 
 	return opts, nil
+}
+
+// cloudeventsClient returns a CloudEvents Client with sane defaults.
+// In comparison with the client returned by cloudevents.NewDefaultClient, this
+// client doesn't enable tracing and offers a configurable timeout for idle
+// connections.
+func cloudeventsClient(idleConnTimeout time.Duration) (cloudevents.Client, error) {
+	t := http.DefaultTransport.(*http.Transport)
+	t.IdleConnTimeout = idleConnTimeout
+
+	p, err := cehttp.New(cehttp.WithRoundTripper(t))
+	if err != nil {
+		return nil, fmt.Errorf("creating cehttp.Protocol: %w", err)
+	}
+
+	return cloudevents.NewClient(p)
 }
 
 // runRecorder runs the given EventRecorder.
