@@ -64,27 +64,25 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("reading options: %w", err)
 	}
 
-	attackr := vegeta.NewAttacker(
+	va := vegeta.NewAttacker(
 		vegeta.Workers(*opts.workers),
 		vegeta.Timeout(*opts.timeout),
 	)
 
-	pacr := vegeta.ConstantPacer{
-		Freq: int(*opts.frequency),
-		Per:  time.Second,
+	var atk Attacker
+
+	switch *opts.mode {
+	case modeConstant:
+		atk = NewConstantAttacker(cloudeventTargeter(opts), va, *opts.frequency)
+	default:
+		return fmt.Errorf("mode %q is unimplemented", *opts.mode)
 	}
 
-	fmt.Fprintln(stdout, "Running attack at", pacr, "for", *opts.duration)
+	fmt.Fprintln(stdout, "Running attack", atk, "for", *opts.duration)
 
-	var metrics vegeta.Metrics
-
-	for res := range attackr.Attack(cloudeventTargeter(opts), pacr, *opts.duration, "drill") {
-		metrics.Add(res)
-	}
+	metrics := atk.Attack(*opts.duration)
 
 	fmt.Fprintln(stdout, "Attack completed")
-
-	metrics.Close()
 
 	fmt.Fprintln(stdout, "---- Results ----")
 
@@ -106,6 +104,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 // cmdOpts are the options that can be passed to the command.
 type cmdOpts struct {
 	targetURL *string
+	mode      *mode
 	frequency *uint
 	msgSize   *uint
 	duration  *time.Duration
@@ -118,6 +117,7 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 	opts := &cmdOpts{}
 
 	opts.targetURL = f.String("u", "", "URL of the CloudEvents receiver to send events to")
+	modeStr := f.String("m", modeConstant.String(), "Mode of operation")
 	opts.frequency = f.Uint("f", defaultFrequency, "Frequency of requests in events/s")
 	opts.msgSize = f.Uint("s", defaultMsgSizeBytes, "Size of the events' data in bytes")
 	opts.duration = f.Duration("d", defaultAttackDuration, "Duration of the attack")
@@ -134,9 +134,17 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 	if _, err := url.Parse(*opts.targetURL); err != nil {
 		return nil, fmt.Errorf("invalid target URL: %w", err)
 	}
+
+	m, err := toMode(*modeStr)
+	if err != nil {
+		return nil, err
+	}
+	opts.mode = m
+
 	if f := *opts.frequency; f > math.MaxInt32 {
 		return nil, fmt.Errorf("frequency %d overflows the capacity of an integer", f)
 	}
+
 	if s := *opts.msgSize; s > maxMsgSizeBytes {
 		return nil, fmt.Errorf("message size %d B exceeds the maximum of %d B", s, maxMsgSizeBytes)
 	}

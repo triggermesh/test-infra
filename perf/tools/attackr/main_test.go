@@ -153,6 +153,20 @@ func TestArgs(t *testing.T) {
 		}
 	})
 
+	t.Run("unsupported -m value", func(t *testing.T) {
+		const mode = "test"
+
+		err := run([]string{tCmd, "-u=http://target", "-m", mode}, &stdout, &stderr)
+		if err == nil {
+			t.Fatal("Expected command to fail")
+		}
+
+		expectMsg := `unsupported mode "` + mode + `"`
+		if errStr := err.Error(); !strings.Contains(errStr, expectMsg) {
+			t.Fatalf("Unexpected error message: %q", errStr)
+		}
+	})
+
 	t.Run("value of -f exceeds limit", func(t *testing.T) {
 		aboveLimit := strconv.FormatUint(math.MaxInt32+1, 10)
 
