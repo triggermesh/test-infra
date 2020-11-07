@@ -10,6 +10,8 @@ Usage of attackr:
         Frequency of requests in events/s (default 1000)
   -s uint
         Size of the events' data in bytes (default 2048)
+  -t duration
+        Maximum time to wait for each request to be responded to (default 3s)
   -u string
         URL of the CloudEvents receiver to send events to
   -w uint

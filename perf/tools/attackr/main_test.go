@@ -86,6 +86,45 @@ func TestAttack(t *testing.T) {
 	}
 }
 
+func TestTimeout(t *testing.T) {
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	const dur = 10 * time.Millisecond
+	const freq = 1 // send only 1 request since dur < 1s
+
+	const timeout = 1 * time.Millisecond
+
+	var handleSlowFn http.HandlerFunc = func(http.ResponseWriter, *http.Request) {
+		time.Sleep(timeout * 3)
+	}
+	s := httptest.NewServer(handleSlowFn)
+
+	err := run([]string{tCmd, "-u", s.URL, "-f", strconv.Itoa(freq), "-d", dur.String(),
+		"-t", timeout.String()},
+		&stdout, &stderr,
+	)
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	s.Close()
+
+	output := stdout.String()
+
+	if !strings.Contains(output, "---- Results ----") {
+		t.Fatal("Command didn't print results. Log:\n" + stdout.String())
+	}
+
+	if !strings.Contains(output, "status codes : map[0:1]") {
+		t.Error("Expected request to be reported as failed. Log:\n" + stdout.String())
+	}
+
+	if !strings.Contains(output, "Client.Timeout exceeded while awaiting headers") {
+		t.Error("Expected request to time out. Log:\n" + stdout.String())
+	}
+}
+
 func TestArgs(t *testing.T) {
 	var stdout strings.Builder
 	var stderr strings.Builder

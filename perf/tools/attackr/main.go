@@ -40,6 +40,8 @@ const (
 
 	defaultAttackDuration = 10 * time.Second
 
+	defaultClientTimeout = 3 * time.Second
+
 	ceType   = "io.triggermesh.perf.drill"
 	ceSource = "attackr"
 )
@@ -64,7 +66,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	attackr := vegeta.NewAttacker(
 		vegeta.Workers(*opts.workers),
-		vegeta.MaxBody(0), // don't read response bodies
+		vegeta.Timeout(*opts.timeout),
 	)
 
 	pacr := vegeta.ConstantPacer{
@@ -107,6 +109,7 @@ type cmdOpts struct {
 	frequency *uint
 	msgSize   *uint
 	duration  *time.Duration
+	timeout   *time.Duration
 	workers   *uint64
 }
 
@@ -118,6 +121,7 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 	opts.frequency = f.Uint("f", defaultFrequency, "Frequency of requests in events/s")
 	opts.msgSize = f.Uint("s", defaultMsgSizeBytes, "Size of the events' data in bytes")
 	opts.duration = f.Duration("d", defaultAttackDuration, "Duration of the attack")
+	opts.timeout = f.Duration("t", defaultClientTimeout, "Maximum time to wait for each request to be responded to")
 	opts.workers = f.Uint64("w", vegeta.DefaultWorkers, "Number of initial vegeta workers")
 
 	if err := f.Parse(args[1:]); err != nil {
