@@ -42,6 +42,8 @@ const (
 
 	defaultClientTimeout = 3 * time.Second
 
+	rampAttackIntervals = 5
+
 	ceType   = "io.triggermesh.perf.drill"
 	ceSource = "attackr"
 )
@@ -69,11 +71,18 @@ func run(args []string, stdout, stderr io.Writer) error {
 		vegeta.Timeout(*opts.timeout),
 	)
 
+	trg := cloudeventTargeter(opts)
+
 	var atk Attacker
 
 	switch *opts.mode {
 	case modeConstant:
-		atk = NewConstantAttacker(cloudeventTargeter(opts), va, *opts.frequency)
+		atk = NewConstantAttacker(trg, va, *opts.frequency)
+	case modeRamp:
+		atk, err = NewRampAttacker(trg, va, *opts.frequency, rampAttackIntervals)
+		if err != nil {
+			return fmt.Errorf("creating ramp attacker: %w", err)
+		}
 	default:
 		return fmt.Errorf("mode %q is unimplemented", *opts.mode)
 	}

@@ -30,7 +30,7 @@ import (
 
 const tCmd = "test"
 
-func TestAttack(t *testing.T) {
+func TestConstantAttack(t *testing.T) {
 	var stdout strings.Builder
 	var stderr strings.Builder
 
@@ -66,7 +66,63 @@ func TestAttack(t *testing.T) {
 
 	output := stdout.String()
 
-	paceStr := fmt.Sprintf("{%d hits/1s} for %s", freq, dur.String())
+	paceStr := fmt.Sprintf("Constant{%d hits/1s} for %s", freq, dur.String())
+	if !strings.Contains(output, paceStr) {
+		t.Error("Command didn't print expected pace. Log:\n" + stdout.String())
+	}
+
+	if !strings.Contains(output, "---- Results ----") {
+		t.Fatal("Command didn't print results. Log:\n" + stdout.String())
+	}
+
+	rcvdCountStr := strconv.Itoa(int(*rcvdCount))
+	if !strings.Contains(output, "requests     : "+rcvdCountStr) {
+		t.Error("Reported requests number doesn't match number of received events ("+rcvdCountStr+").",
+			"Log:\n"+stdout.String())
+	}
+
+	if !strings.Contains(output, "success %    : 100") {
+		t.Error("Expected a reported success of 100%. Log:\n" + stdout.String())
+	}
+}
+
+func TestRampAttack(t *testing.T) {
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	const dur = 50 * time.Millisecond // 5 intervals of 10ms
+	const freq = 5_000                // req/s
+
+	// Estimated: 150 requests -> 5 increments of (dur/5)*((freq/5)/1000) (1s = 1000ms)
+	// Tolerate 1% margin compared to estimate.
+	const estimatedMinReq = 148
+	const estimatedMaxReq = 152
+
+	rcvdCount := new(int32)
+
+	var countFn http.HandlerFunc = func(http.ResponseWriter, *http.Request) {
+		atomic.AddInt32(rcvdCount, 1)
+	}
+	s := httptest.NewServer(countFn)
+
+	err := run([]string{tCmd, "-u", s.URL, "-m=ramp", "-f", strconv.Itoa(freq), "-d", dur.String()}, &stdout, &stderr)
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	s.Close()
+
+	if *rcvdCount < estimatedMinReq || *rcvdCount > estimatedMaxReq {
+		t.Errorf("Expected %d < requests < %d, got %d requests", estimatedMinReq, estimatedMaxReq, *rcvdCount)
+	}
+
+	if stderr.Len() != 0 {
+		t.Error("Expected no output to stderr, got:\n" + stderr.String())
+	}
+
+	output := stdout.String()
+
+	paceStr := fmt.Sprintf("Ramp{5 intervals, %d hits/1s increments} for %s", freq/5, dur.String())
 	if !strings.Contains(output, paceStr) {
 		t.Error("Command didn't print expected pace. Log:\n" + stdout.String())
 	}
@@ -91,7 +147,7 @@ func TestTimeout(t *testing.T) {
 	var stderr strings.Builder
 
 	const dur = 10 * time.Millisecond
-	const freq = 1 // send only 1 request since dur < 1s
+	const freq = 100 // send only 1 request (100/s * 0.01s)
 
 	const timeout = 1 * time.Millisecond
 
