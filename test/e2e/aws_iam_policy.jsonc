@@ -86,11 +86,12 @@
                 "arn:aws:codecommit:*:043455440429:e2e-*"
             ]
         },
-                {
+        {
             "Sid": "AWSSQSSourceReceiveAdapter",
             "Effect": "Allow",
             "Action": [
                 "sqs:GetQueueUrl",
+                "sqs:ReceiveMessage",
                 "sqs:DeleteMessage",
                 "sqs:DeleteMessageBatch"
             ],
