@@ -74,6 +74,19 @@
             ]
         },
         {
+            "Sid": "E2EFrameworkKinesis",
+            "Effect": "Allow",
+            "Action": [
+                "kinesis:PutRecord",
+                "kinesis:DeleteStream",
+                "kinesis:CreateStream",
+                "kinesis:DescribeStream"
+            ],
+            "Resource": [
+                "arn:aws:kinesis:*:043455440429:stream/e2e-*"
+            ]
+        },
+        {
             "Sid": "AWSCodeCommitSourceReceiveAdapter",
             "Effect": "Allow",
             "Action": [
@@ -97,6 +110,17 @@
             ],
             "Resource": [
                 "arn:aws:sqs:*:043455440429:e2e-*"
+            ]
+        },
+        {
+            "Sid": "AWSKinesisSourceReceiveAdapter",
+            "Effect": "Allow",
+            "Action": [
+                "kinesis:GetShardIterator",
+                "kinesis:GetRecords"
+            ],
+            "Resource": [
+                "arn:aws:kinesis:*:043455440429:stream/e2e-*"
             ]
         }
     ]
