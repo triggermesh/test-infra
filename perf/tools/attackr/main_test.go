@@ -73,17 +73,17 @@ func TestConstantAttack(t *testing.T) {
 		t.Error("Command didn't print expected pace. Log:\n" + stdout.String())
 	}
 
-	if !strings.Contains(output, "---- Results ----") {
+	if !strings.Contains(output, "---- Report ----") {
 		t.Fatal("Command didn't print results. Log:\n" + stdout.String())
 	}
 
 	rcvdCountStr := strconv.Itoa(int(*rcvdCount))
-	if !strings.Contains(output, "requests     : "+rcvdCountStr) {
+	if !strings.Contains(output, "Requests      [total, rate, throughput]         "+rcvdCountStr) {
 		t.Error("Reported requests number doesn't match number of received events ("+rcvdCountStr+").",
 			"Log:\n"+stdout.String())
 	}
 
-	if !strings.Contains(output, "success %    : 100") {
+	if !strings.Contains(output, "Success       [ratio]                           100.00%") {
 		t.Error("Expected a reported success of 100%. Log:\n" + stdout.String())
 	}
 }
@@ -131,17 +131,17 @@ func TestRampAttack(t *testing.T) {
 		t.Error("Command didn't print expected pace. Log:\n" + stdout.String())
 	}
 
-	if !strings.Contains(output, "---- Results ----") {
+	if !strings.Contains(output, "---- Report ----") {
 		t.Fatal("Command didn't print results. Log:\n" + stdout.String())
 	}
 
 	rcvdCountStr := strconv.Itoa(int(*rcvdCount))
-	if !strings.Contains(output, "requests     : "+rcvdCountStr) {
+	if !strings.Contains(output, "Requests      [total, rate, throughput]         "+rcvdCountStr) {
 		t.Error("Reported requests number doesn't match number of received events ("+rcvdCountStr+").",
 			"Log:\n"+stdout.String())
 	}
 
-	if !strings.Contains(output, "success %    : 100") {
+	if !strings.Contains(output, "Success       [ratio]                           100.00%") {
 		t.Error("Expected a reported success of 100%. Log:\n" + stdout.String())
 	}
 }
@@ -176,11 +176,11 @@ func TestTimeout(t *testing.T) {
 
 	output := stdout.String()
 
-	if !strings.Contains(output, "---- Results ----") {
+	if !strings.Contains(output, "---- Report ----") {
 		t.Fatal("Command didn't print results. Log:\n" + stdout.String())
 	}
 
-	if !strings.Contains(output, "status codes : map[0:1]") {
+	if !strings.Contains(output, "Status Codes  [code:count]                      0:1") {
 		t.Error("Expected request to be reported as failed. Log:\n" + stdout.String())
 	}
 

@@ -112,19 +112,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	fmt.Fprintln(stdout, "Attack completed")
 
-	fmt.Fprintln(stdout, "---- Results ----")
+	fmt.Fprintln(stdout, "---- Report ----")
 
-	const metricFmt = "%-13s: %v\n"
-	fmt.Fprintf(stdout, metricFmt, "duration", metrics.Duration)
-	fmt.Fprintf(stdout, metricFmt, "bytes out", metrics.BytesOut)
-	fmt.Fprintf(stdout, metricFmt, "bytes in", metrics.BytesIn)
-	fmt.Fprintf(stdout, metricFmt, "requests", metrics.Requests)
-	fmt.Fprintf(stdout, metricFmt, "wait time", metrics.Wait)
-	fmt.Fprintf(stdout, metricFmt, "rate", metrics.Rate)
-	fmt.Fprintf(stdout, metricFmt, "throughput", metrics.Throughput)
-	fmt.Fprintf(stdout, metricFmt, "success %", metrics.Success*100)
-	fmt.Fprintf(stdout, metricFmt, "status codes", metrics.StatusCodes)
-	fmt.Fprintf(stdout, metricFmt, "errors", metrics.Errors)
+	if err := vegeta.NewTextReporter(&metrics).Report(stdout); err != nil {
+		return fmt.Errorf("writing attack report: %w", err)
+	}
 
 	return nil
 }
