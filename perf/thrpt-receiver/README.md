@@ -25,6 +25,7 @@ Usage of thrpt-receiver:
    * [Reading results](#reading-results)
    * [Clean up](#clean-up)
 1. [Plotting](#plotting)
+1. [Profiling](#profiling)
 
 ## Running the receiver in a cluster
 
@@ -172,6 +173,76 @@ create such visualizations are described in this section.
 
    ![Chart](.assets/plot-gsheets-full-chart.png)
 
+## Profiling
+
+The figures presented in this section describe the profile of a single instance of `thrpt-receiver` running under heavy
+load on a dedicated node in the TriggerMesh production cluster. Those metrics can be used as a baseline to assess the
+performance of other CloudEvent receivers.
+
+The Go garbage collector was disabled for the entire duration of the load test to prevent GC pauses from influencing the
+results. The event store was initialized with a size of 300,000 using the `-estimated-total-events` flag.
+
+We also ensured that limits of the `thrpt-receiver` process, in particular the maximum number of open files, was high
+enough to sustain a high number of concurrent connections. The number of outgoing connections established by a single
+load generator can not exceed the number of ports available on its host (65536), so we consider any value above that
+number as acceptable for the `nofile` resource limit of the receiver:
+
+```
+/ # cat /proc/3352/limits
+Limit                     Soft Limit           Hard Limit           Units
+...
+Max processes             unlimited            unlimited            processes
+Max open files            1048576              1048576              files
+...
+```
+
+The attack was performed in 5 intervals of 12s, by increments of 1600 events/sec, with a payload of 2 KiB. Below is a
+summary of the attack as reported by [`vegeta`][vegeta].
+
+```
+Requests      [total, rate, throughput]         275124, 4543.47, 4539.96
+Duration      [total, attack, wait]             1m1s, 1m1s, 46.915ms
+Latencies     [min, mean, 50, 90, 95, 99, max]  250.013µs, 152.998ms, 1.134ms, 555.641ms, 911.698ms, 1.36s, 2.412s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     563453952, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:275124
+Error Set:
+```
+
+The throughput data collected by the Mako sidecar was extracted as a CSV file and displayed in a chart generated using
+Google Sheets. Although vegeta reported a success rate of 100%, we can observe that the thoughput becomes extremely
+unstable between the 4th and 5th intervals, roughly between 6400 and 8000 events/sec.
+
+![Receive throughput](.assets/profiling-receive-throughput.png)
+
+During the load test, `thrpt-receiver` was running with the `-profiling` flag so we could extract an execution trace
+from the pprof server and analyze the heap profile of the application:
+
+```console
+$ kubectl -n perf-thrpt-receiver port-forward thrpt-receiver 8008
+Forwarding from 127.0.0.1:8008 -> 8008
+```
+
+```console
+$ curl 'http://localhost:8008/debug/pprof/trace?seconds=75' > trace.out
+(collects an execution trace for 75s, then returns)
+```
+
+```console
+$ go tool trace trace.out
+2020/11/10 21:39:10 Parsing trace...
+2020/11/10 21:39:18 Splitting trace...
+2020/11/10 21:39:32 Opening browser. Trace viewer is listening on http://127.0.0.1:33877
+```
+
+In a web browser, we observed an initial heap size of 4.4 MiB. After the 275124 events had been received, 3.5 GiB were
+allocated to the heap. This number went down to 125.7 MiB after the forced garbage collection triggered by
+`thrpt-receiver`.
+
+![Heap profile after GC](.assets/profiling-heap.png)
+
 [mako-stub]: https://github.com/knative/pkg/tree/release-0.18/test/mako
 [gsheets-ts-formula]: https://webapps.stackexchange.com/a/112651
 [gsheets-fill]: https://support.google.com/docs/answer/75509
+[vegeta]: https://github.com/tsenart/vegeta
