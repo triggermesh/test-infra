@@ -78,37 +78,52 @@ $ kubectl -n perf-thrpt-receiver logs thrpt-receiver receiver
 
 ### Reading results
 
-The results, presented in a CSV format, can be exported from the logs of the Mako sidecar:
+The results, presented in a CSV format, can be exported from a HTTP endpoint served by the Mako sidecar on port `8081`.
+
+Forward the local TCP port `8081` to the `thrpt-receiver` Pod:
 
 ```console
-$ kubectl -n perf-thrpt-receiver logs thrpt-receiver mako-stub
+$ kubectl -n perf-thrpt-receiver port-forward thrpt-receiver 8081
+Forwarding from 127.0.0.1:8081 -> 8081
+```
+
+Retrieve the results over HTTP at the `/results` endpoint and write the output to a file named `results.csv`:
+
+```console
+$ curl http://localhost:8081/results -o results.csv
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 6771k    0 6771k    0     0  5976k      0 --:--:--  0:00:01 --:--:-- 5976k
+```
+
+The contents of the `results.csv` file should be similar to the example below:
+
+```csv
 # Received input
 # Input completed
 # Benchmark  - Event throughput
 # {"benchmarkKey":"","tags":["nodes=6","project-id=cebuk-01","zone=us-central1-a","commit=f584d79","kubernetes=v1.17.12-gke.500","goversion=go1.15.2"]}
 # inputValue,errorMessage,rt
 ...
-1.6040212866868181e+12,,4
-1.6040212866869102e+12,,5
-1.6040212866874644e+12,,6
-1.6040212866875515e+12,,7
-1.6040212866882632e+12,,8
-1.6040212866883477e+12,,9
-1.6040212880283127e+12,,1
-1.6040212880283296e+12,,1
-1.6040212880290117e+12,,2
-1.6040212880291021e+12,,3
-1.6040212880294727e+12,,4
-1.6040212880295918e+12,,5
-1.6040212880302295e+12,,6
-1.6040212880302585e+12,,7
-1.6040212880309763e+12,,8
+1.605030612296653e+12,,746
+1.605030612298227e+12,,747
+1.6050306122983225e+12,,748
+1.6050306122986868e+12,,749
+1.6050306122990955e+12,,750
+1.605030612299801e+12,,751
+1.605030612300778e+12,,752
+1.60503061230106e+12,,753
 ...
 # CSV end
-
 ```
 
 See the [Plotting](#plotting) section below for suggestions about exploiting those results.
+
+Send a final HTTP request to the `/close` endpoint to allow the Mako sidecar to terminate:
+
+```console
+$ curl -s http://localhost:8081/close
+```
 
 ### Clean up
 
