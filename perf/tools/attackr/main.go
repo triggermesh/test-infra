@@ -39,8 +39,7 @@ const (
 	maxMsgSizeBytes     = 32 * 1024 // 32 KiB
 
 	defaultAttackDuration = 10 * time.Second
-
-	defaultClientTimeout = 10 * time.Second
+	defaultClientTimeout  = 10 * time.Second
 
 	rampAttackIntervals = 5
 
@@ -66,6 +65,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("reading options: %w", err)
 	}
 
+	var enc vegeta.Encoder
+	if *opts.output != "" {
+		output, err := os.Create(*opts.output)
+		if err != nil {
+			return fmt.Errorf("creating output file %q: %w", *opts.output, err)
+		}
+		defer output.Close()
+
+		enc = vegeta.NewEncoder(output)
+	}
+
 	va := vegeta.NewAttacker(
 		vegeta.Workers(*opts.workers),
 		vegeta.Timeout(*opts.timeout),
@@ -89,7 +99,16 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	fmt.Fprintln(stdout, "Running attack", atk, "for", *opts.duration)
 
-	metrics := atk.Attack(*opts.duration)
+	var metrics vegeta.Metrics
+
+	for res := range atk.Attack(*opts.duration) {
+		metrics.Add(res)
+		if enc != nil {
+			enc(res)
+		}
+	}
+
+	metrics.Close()
 
 	fmt.Fprintln(stdout, "Attack completed")
 
@@ -119,6 +138,7 @@ type cmdOpts struct {
 	duration  *time.Duration
 	timeout   *time.Duration
 	workers   *uint64
+	output    *string
 }
 
 // readOpts parses and validates options from commmand-line flags.
@@ -132,6 +152,7 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 	opts.duration = f.Duration("d", defaultAttackDuration, "Duration of the attack")
 	opts.timeout = f.Duration("t", defaultClientTimeout, "Maximum time to wait for each request to be responded to")
 	opts.workers = f.Uint64("w", vegeta.DefaultWorkers, "Number of initial vegeta workers")
+	opts.output = f.String("o", "", "File to write vegeta's binary results to, if defined")
 
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, err
@@ -156,6 +177,13 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 
 	if s := *opts.msgSize; s > maxMsgSizeBytes {
 		return nil, fmt.Errorf("message size %d B exceeds the maximum of %d B", s, maxMsgSizeBytes)
+	}
+
+	if *opts.output != "" {
+		parsedOutput := *opts.output
+		if *opts.output, err = filepath.Abs(*opts.output); err != nil {
+			return nil, fmt.Errorf("converting %q to an absolute path: %w", parsedOutput, err)
+		}
 	}
 
 	return opts, nil

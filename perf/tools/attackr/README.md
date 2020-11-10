@@ -10,6 +10,8 @@ Usage of attackr:
         Frequency of requests in events/s (default 1000)
   -m string
         Mode of operation (default "constant")
+  -o string
+        File to write vegeta's binary results to, if defined
   -s uint
         Size of the events' data in bytes (default 2048)
   -t duration

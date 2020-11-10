@@ -27,7 +27,7 @@ import (
 // Attacker is the interface implemented by custom vegeta Attackers.
 type Attacker interface {
 	// Attack performs an attack on a target.
-	Attack(time.Duration) vegeta.Metrics
+	Attack(time.Duration) <-chan *vegeta.Result
 	// The embedded Stringer interface allows to return a pretty-printed
 	// description of the attack.
 	fmt.Stringer
@@ -63,16 +63,8 @@ func NewConstantAttacker(trg vegeta.Targeter, atk *vegeta.Attacker, freq uint) *
 }
 
 // Attack implements Attacker.
-func (a *ConstantAttacker) Attack(d time.Duration) vegeta.Metrics {
-	var metrics vegeta.Metrics
-
-	for res := range a.atk.Attack(a.trg, a.rate, d, "drill") {
-		metrics.Add(res)
-	}
-
-	metrics.Close()
-
-	return metrics
+func (a *ConstantAttacker) Attack(d time.Duration) <-chan *vegeta.Result {
+	return a.atk.Attack(a.trg, a.rate, d, "drill")
 }
 
 // String implements fmt.Stringer.
@@ -116,9 +108,7 @@ func NewRampAttacker(trg vegeta.Targeter, atk *vegeta.Attacker, freq, intervals 
 }
 
 // Attack implements Attacker.
-func (a *RampAttacker) Attack(d time.Duration) vegeta.Metrics {
-	var metrics vegeta.Metrics
-
+func (a *RampAttacker) Attack(d time.Duration) <-chan *vegeta.Result {
 	pcr := &RampPacer{
 		IntervalRate: vegeta.ConstantPacer{
 			// NOTE(antoineco): we expect the caller to understand
@@ -130,13 +120,7 @@ func (a *RampAttacker) Attack(d time.Duration) vegeta.Metrics {
 		IntervalDuration: time.Duration(int64(d) / int64(a.intervals)),
 	}
 
-	for res := range a.atk.Attack(a.trg, pcr, d, "drill") {
-		metrics.Add(res)
-	}
-
-	metrics.Close()
-
-	return metrics
+	return a.atk.Attack(a.trg, pcr, d, "drill")
 }
 
 // RampPacer paces an attack by starting at a constant interval rate for a

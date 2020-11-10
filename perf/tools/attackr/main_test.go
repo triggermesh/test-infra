@@ -18,9 +18,11 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -51,7 +53,7 @@ func TestConstantAttack(t *testing.T) {
 
 	err := run([]string{tCmd, "-u", s.URL, "-f", strconv.Itoa(freq), "-d", dur.String()}, &stdout, &stderr)
 	if err != nil {
-		t.Fatal("Unexpected error: ", err)
+		t.Fatal("Unexpected error:", err)
 	}
 
 	s.Close()
@@ -105,9 +107,11 @@ func TestRampAttack(t *testing.T) {
 	}
 	s := httptest.NewServer(countFn)
 
-	err := run([]string{tCmd, "-u", s.URL, "-m=ramp", "-f", strconv.Itoa(freq), "-d", dur.String()}, &stdout, &stderr)
+	err := run([]string{tCmd, "-u", s.URL, "-f", strconv.Itoa(freq), "-d", dur.String(),
+		"-m=ramp"},
+		&stdout, &stderr)
 	if err != nil {
-		t.Fatal("Unexpected error: ", err)
+		t.Fatal("Unexpected error:", err)
 	}
 
 	s.Close()
@@ -161,10 +165,14 @@ func TestTimeout(t *testing.T) {
 		&stdout, &stderr,
 	)
 	if err != nil {
-		t.Fatal("Unexpected error: ", err)
+		t.Fatal("Unexpected error:", err)
 	}
 
 	s.Close()
+
+	if stderr.Len() != 0 {
+		t.Error("Expected no output to stderr, got:\n" + stderr.String())
+	}
 
 	output := stdout.String()
 
@@ -178,6 +186,57 @@ func TestTimeout(t *testing.T) {
 
 	if !strings.Contains(output, "Client.Timeout exceeded while awaiting headers") {
 		t.Error("Expected request to time out. Log:\n" + stdout.String())
+	}
+}
+
+func TestOutput(t *testing.T) {
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	const dur = 10 * time.Millisecond
+	const freq = 100 // send only 1 request (100/s * 0.01s)
+
+	tmpFile, err := ioutil.TempFile("", "attackr")
+	if err != nil {
+		t.Fatal("Error creating temp output file:", err)
+	}
+	_ = tmpFile.Close()
+
+	t.Cleanup(func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Fatal("Failed to remove temp output file:", err)
+		}
+	})
+
+	var handleFn http.HandlerFunc = func(http.ResponseWriter, *http.Request) {}
+	s := httptest.NewServer(handleFn)
+
+	err = run([]string{tCmd, "-u", s.URL, "-f", strconv.Itoa(freq), "-d", dur.String(),
+		"-o", tmpFile.Name()},
+		&stdout, &stderr,
+	)
+	if err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+
+	s.Close()
+
+	if stderr.Len() != 0 {
+		t.Error("Expected no output to stderr, got:\n" + stderr.String())
+	}
+
+	f, err := os.Open(tmpFile.Name())
+	if err != nil {
+		t.Fatal("Failed to open temp output file:", err)
+	}
+
+	fs, err := f.Stat()
+	if err != nil {
+		t.Fatal("Failed to read info of temp output file:", err)
+	}
+
+	if fs.Size() == 0 {
+		t.Error("Expected temp output file", f.Name(), "to contain results")
 	}
 }
 
