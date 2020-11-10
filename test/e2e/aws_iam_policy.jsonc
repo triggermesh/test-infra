@@ -116,6 +116,7 @@
             "Sid": "AWSKinesisSourceReceiveAdapter",
             "Effect": "Allow",
             "Action": [
+                "kinesis:DescribeStream",
                 "kinesis:GetShardIterator",
                 "kinesis:GetRecords"
             ],
