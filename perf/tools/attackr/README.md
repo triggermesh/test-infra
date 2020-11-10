@@ -26,7 +26,7 @@ To compile the tool from source for your current platform and architecture and r
 
 * generate the `attackr` binary in the current directory with [`go build .`][go-build], then execute it with `./attackr
   [arguments...]`
-* combine compilation and execution in a temporary directory with [`go run . [arguments...]`][go-run].
+* combine compilation and execution in a temporary directory with [`go run . [arguments...]`][go-run]
 
 ### Running inside Kubernetes
 
