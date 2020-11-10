@@ -40,7 +40,7 @@ const (
 
 	defaultAttackDuration = 10 * time.Second
 
-	defaultClientTimeout = 3 * time.Second
+	defaultClientTimeout = 10 * time.Second
 
 	rampAttackIntervals = 5
 
