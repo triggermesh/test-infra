@@ -153,7 +153,7 @@ var _ = Describe("AWS SQS source", func() {
 
 		// Those tests do not require a real repository or sink
 		BeforeEach(func() {
-			queueARN = "arn:aws:sqs:us-west-2:043455440429::fake-queue"
+			queueARN = "arn:aws:sqs:us-west-2:123456789012:fake-queue"
 
 			awsCreds = credentials.Value{
 				AccessKeyID:     "fake",
