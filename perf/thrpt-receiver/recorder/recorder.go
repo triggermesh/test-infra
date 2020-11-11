@@ -28,11 +28,7 @@ import (
 
 // DefaultStoreSize is the size to pre-allocate to the events storage when not
 // explicitly defined.
-const DefaultStoreSize = 1000
-
-// Size of the buffered channel received events are sent to before being
-// processed.
-const receiveBufferSize = 100
+const DefaultStoreSize = 10_000
 
 // EventStore is a store of timestamps of received events keyed by event ID.
 type EventStore map[ /*event id*/ string] /*rcv time*/ time.Time
@@ -53,6 +49,12 @@ var _ EventRecorder = (*AsyncEventRecorder)(nil)
 // AsyncEventRecorder is an EventRecorder that processes events asynchronously,
 // without blocking the caller.
 type AsyncEventRecorder struct {
+	// Channel received events are sent to before being processed.
+	//
+	// It is recommended to create this channel with a large buffer,
+	// especially at high receive rates where the single processing
+	// goroutine is likely to lag behind the multiple concurrent writers,
+	// which would in turn be blocked once the buffer gets full.
 	receivedCh chan *recordedEvent
 
 	sync.RWMutex
@@ -65,8 +67,15 @@ func NewAsyncEventRecorder(storeSize uint) *AsyncEventRecorder {
 		storeSize = DefaultStoreSize
 	}
 
+	// Make this constructor ultra-conservative and set the size of the
+	// receive channel's buffer to the same value as the initial event
+	// storage, so we can cope with high receive rates without blocking the
+	// writers.
+	//
+	// The cost of a single record should be 64+128=192 bits (size of a
+	// time.Time + size of a UUID).
 	return &AsyncEventRecorder{
-		receivedCh:     make(chan *recordedEvent, receiveBufferSize),
+		receivedCh:     make(chan *recordedEvent, storeSize),
 		recordedEvents: make(EventStore, storeSize),
 	}
 }

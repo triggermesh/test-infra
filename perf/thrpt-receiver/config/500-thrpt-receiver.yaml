@@ -38,6 +38,14 @@ spec:
   restartPolicy: Never
   serviceAccountName: *app
 
+  # In production, with n1-standard-2 nodes, the sum of resources requested by
+  # both containers can not exceed the values below, considering the
+  # system-reserved resources and typical DaemonSets such as kube-proxy and
+  # fluentbit:
+  #
+  #  cpu: 1720m
+  #  memory: 5360Mi
+  #
   containers:
 
   - name: receiver
@@ -55,6 +63,15 @@ spec:
       containerPort: 8080
     - name: pprof
       containerPort: 8008
+    resources:
+      requests:
+        # We set the CPU request as high as possible to ensure the container
+        # receives the highest possible CPU share.
+        # https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#how-pods-with-resource-limits-are-run
+        cpu: 1720m
+        memory: 5360Mi
+      limits:
+        memory: 5360Mi
     volumeMounts:
     - name: &mako config-mako
       mountPath: /etc/config-mako
@@ -62,9 +79,18 @@ spec:
 
   - name: mako-stub
     image: ko://knative.dev/pkg/test/mako/stub-sidecar
+    args:
+      # When defined, serve the results over HTTP at /results.
+      # Otherwise, results are printed to stdout but may be truncated (see knative/pkg#728).
+    - -p=8081
     ports:
     - name: quickstore
       containerPort: 9813
+    - name: results
+      containerPort: 8081
+    # Do not reserve resources for the Mako sidecar, since it remains idle for
+    # the duration of the benchmark and only processes data at the very end.
+    resources: {}
     volumeMounts:
       - name: *mako
         mountPath: /etc/config-mako
