@@ -1,0 +1,85 @@
+[
+  {
+    "_id": "5fad5882028c6aafa3447b6e",
+    "index": 0,
+    "guid": "6d679c93-da46-40f5-914c-53fc263b7f98",
+    "isActive": true,
+    "balance": "$2,906.29",
+    "picture": "http://placehold.it/32x32",
+    "age": 26,
+    "eyeColor": "brown",
+    "name": {
+      "first": "Jo",
+      "last": "Murray"
+    },
+    "company": "ANIVET",
+    "email": "jo.murray@anivet.name",
+    "phone": "+1 (856) 573-3357",
+    "address": "264 Vernon Avenue, Layhill, Arizona, 5744",
+    "about": "Incididunt non sint nostrud veniam aliqua laborum veniam est in ut incididunt.",
+    "registered": "Friday, February 28, 2020 12:40 AM",
+    "latitude": "-79.885342",
+    "longitude": "41.88282",
+    "tags": [
+      "quis",
+      "sunt"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Annabelle Hill"
+      },
+      {
+        "id": 1,
+        "name": "Isabel Delaney"
+      },
+      {
+        "id": 2,
+        "name": "Jessie Morris"
+      }
+    ],
+    "greeting": "Hello, Jo! You have 8 unread messages.",
+    "favoriteFruit": "banana"
+  },
+  {
+    "_id": "5fad58824ffc1acbaf19603b",
+    "index": 1,
+    "guid": "7b5b9956-04cd-4ebf-87bb-563379381ebe",
+    "isActive": false,
+    "balance": "$2,894.41",
+    "picture": "http://placehold.it/32x32",
+    "age": 33,
+    "eyeColor": "brown",
+    "name": {
+      "first": "Tasha",
+      "last": "Patton"
+    },
+    "company": "EARGO",
+    "email": "tasha.patton@eargo.info",
+    "phone": "+1 (906) 479-2456",
+    "address": "487 Gilmore Court, Ezel, American Samoa, 992",
+    "about": "Deserunt fugiat id anim irure nulla mollit deserunt.",
+    "registered": "Tuesday, October 15, 2019 2:46 AM",
+    "latitude": "67.964493",
+    "longitude": "-43.049266",
+    "tags": [
+      "nulla"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Myrna Gray"
+      },
+      {
+        "id": 1,
+        "name": "Velma Swanson"
+      },
+      {
+        "id": 2,
+        "name": "Carey Boyd"
+      }
+    ],
+    "greeting": "Hello, Tasha! You have 9 unread messages.",
+    "favoriteFruit": "apple"
+  }
+]
