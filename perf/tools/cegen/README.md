@@ -34,6 +34,24 @@ To compile the tool from source for your current platform and architecture and r
   [arguments...]`
 * combine compilation and execution in a temporary directory with [`go run . [arguments...]`][go-run]
 
+## Benchmark
+
+`cegen` is able to output ~110,000 targets/sec to a tmpfs on an Intel Core i5-8265U CPU.
+
+```console
+$ mount -t tmpfs -o size=512m tmpfs /mnt/ramdisk/
+```
+
+```console
+$ time (cegen -u http://localhost -d '@2k_payload.txt' > /mnt/ramdisk/out &; pid=$!; sleep 1; kill $pid)
+0.00s user 0.00s system 0% cpu 1.003 total
+```
+
+```console
+$ cat /mnt/ramdisk/out | wc -l
+112190
+```
+
 [vegeta]: https://github.com/tsenart/vegeta
 [go-build]: https://golang.org/cmd/go/#hdr-Compile_packages_and_dependencies
 [go-run]: https://golang.org/cmd/go/#hdr-Compile_and_run_Go_program
