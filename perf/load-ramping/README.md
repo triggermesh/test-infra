@@ -41,6 +41,8 @@ run:
 $ gnuplot -e "set term png size 1280, 800" ramp-requests.plt > result.png
 ```
 
+![Latency profile](../thrpt-receiver/.assets/profiling-latencies.png)
+
 ## Running inside Kubernetes
 
 ### Deployment

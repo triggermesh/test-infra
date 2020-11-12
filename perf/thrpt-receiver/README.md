@@ -26,6 +26,8 @@ Usage of thrpt-receiver:
    * [Clean up](#clean-up)
 1. [Plotting](#plotting)
 1. [Profiling](#profiling)
+   * [Throughput](#throughput)
+   * [Latency](#latency)
 
 ## Running the receiver in a cluster
 
@@ -176,13 +178,10 @@ create such visualizations are described in this section.
 ## Profiling
 
 The figures presented in this section describe the profile of a single instance of `thrpt-receiver` running under heavy
-load on a dedicated node in the TriggerMesh production cluster. Those metrics can be used as a baseline to assess the
-performance of other CloudEvent receivers.
+load on a dedicated node in the TriggerMesh production cluster ([GCE n1-standard-2][gce-machines]). Those metrics can be
+used as a baseline to assess the performance of other CloudEvent handlers.
 
-The Go garbage collector was disabled for the entire duration of the load test to prevent GC pauses from influencing the
-results. The event store was initialized with a size of 300,000 using the `-estimated-total-events` flag.
-
-We also ensured that limits of the `thrpt-receiver` process, in particular the maximum number of open files, was high
+We ensured that the limits of the `thrpt-receiver` process, in particular the maximum number of open files, were high
 enough to sustain a high number of concurrent connections. The number of outgoing connections established by a single
 load generator can not exceed the number of ports available on its host (65536), so we consider any value above that
 number as acceptable for the `nofile` resource limit of the receiver:
@@ -195,6 +194,11 @@ Max processes             unlimited            unlimited            processes
 Max open files            1048576              1048576              files
 ...
 ```
+
+### Throughput
+
+_The Go garbage collector was disabled for the entire duration of this load test to prevent GC pauses from influencing
+the results. The event store was initialized with a size of 300,000 using the `-estimated-total-events` flag._
 
 The attack was performed in 5 intervals of 12s, by increments of 1600 events/sec, with a payload of 2 KiB. Below is a
 summary of the attack as reported by [`vegeta`][vegeta].
@@ -242,7 +246,93 @@ allocated to the heap. This number went down to 125.7 MiB after the forced garba
 
 ![Heap profile after GC](.assets/profiling-heap.png)
 
+### Latency
+
+_Because a lot more events were generated in the latency test than in the thoughput test (969775 vs. 275124), we ensured
+the Go garbage collector was enabled to prevent the Pod performing the attack from being OOM killed._
+
+Using the [ramp-requests.py](../load-ramping/) script, a succession of 5s attacks were performed at different rates,
+ranging from 1 event/sec to 79,432 events/sec (theoretical), with a payload of 2 KiB.
+
+In the graph below, we can observe that all requests succeeded, even in the higher ranges. However, most requests
+(median) above the 8,000 events/sec mark had to wait for more than 1s to get a response from the receiver.
+
+![Latency profile](.assets/profiling-latencies.png)
+
+Vegeta reports indicate that the receiver starts showing severe signs of weakness (wait times >1sec) somewhere between
+8,000 events/sec and 10,000 events/sec:
+
+```
+Requests      [total, rate, throughput]         39693, 7912.43, 7071.79
+Duration      [total, attack, wait]             5.613s, 5.017s, 596.331ms
+Latencies     [min, mean, 50, 90, 95, 99, max]  417.864µs, 489.299ms, 593.072ms, 735.633ms, 759.615ms, 800.473ms, 1.397s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     81291264, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:39693
+Error Set:
+```
+
+```
+Requests      [total, rate, throughput]         49992, 9989.12, 6506.87
+Duration      [total, attack, wait]             7.683s, 5.005s, 2.678s
+Latencies     [min, mean, 50, 90, 95, 99, max]  598.176µs, 1.481s, 1.496s, 2.594s, 2.648s, 2.724s, 4.554s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     102383616, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:49992
+Error Set:
+```
+
+On the receiver, the measured throughput never exceeded ~7,000 events/sec, as shown in the graph below which is a
+zoomed-in view of the last ~5s of the attack (at a _theoretical_ rate of 79,432 events/sec).
+
+![Receive throughput during latency test](.assets/profiling-latencies-throughput.png)
+
+In reality, the Vegeta reports of the last few attacks show that the attacker itself isn't able to produce more than
+~20,000 events/sec on that hardware.
+
+For a target of 25,118 events/sec:
+
+```
+Requests      [total, rate, throughput]         101381, 20190.99, 6198.92
+Duration      [total, attack, wait]             16.355s, 5.021s, 11.334s
+Latencies     [min, mean, 50, 90, 95, 99, max]  642.621µs, 6.24s, 6.367s, 10.373s, 10.932s, 11.315s, 15.002s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     207628288, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:101381
+Error Set:
+```
+
+For a target of 39,810 events/sec:
+
+```
+Requests      [total, rate, throughput]         103667, 20002.61, 6156.27
+Duration      [total, attack, wait]             16.839s, 5.183s, 11.657s
+Latencies     [min, mean, 50, 90, 95, 99, max]  3.121ms, 6.417s, 6.802s, 10.811s, 11.343s, 11.81s, 15.527s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     212310016, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:103667
+Error Set:
+```
+
+For a target of 50,118 events/sec:
+
+```
+Requests      [total, rate, throughput]         109669, 21870.86, 6144.78
+Duration      [total, attack, wait]             17.848s, 5.014s, 12.833s
+Latencies     [min, mean, 50, 90, 95, 99, max]  390.626µs, 7.392s, 7.892s, 12.029s, 12.302s, 12.779s, 16.851s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     224602112, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:109669
+Error Set:
+```
+
 [mako-stub]: https://github.com/knative/pkg/tree/release-0.18/test/mako
 [gsheets-ts-formula]: https://webapps.stackexchange.com/a/112651
 [gsheets-fill]: https://support.google.com/docs/answer/75509
 [vegeta]: https://github.com/tsenart/vegeta
+[gce-machines]: https://cloud.google.com/compute/docs/machine-types
