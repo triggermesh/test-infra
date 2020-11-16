@@ -70,7 +70,7 @@ It was built using the command below from the current directory:
 $ docker build -t gcr.io/triggermesh/perf/ramp-requests -f container/Dockerfile ../../
 ```
 
-The following environment variables, which correspond to [cegen][cegen]' command-line flags, can be used to control the
+The following environment variables, which correspond to [cegen][cegen]'s command-line flags, can be used to control the
 execution of the attack:
 
 | Variable     | Default                   | Description                                                               |
