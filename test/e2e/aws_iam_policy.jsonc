@@ -113,6 +113,19 @@
             ]
         },
         {
+            "Sid": "E2EFrameworkDynamoDB",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:CreateTable",
+                "dynamodb:DescribeTable",
+                "dynamodb:DeleteTable",
+                "dynamodb:PutItem"
+            ],
+            "Resource": [
+                "arn:aws:dynamodb:*:043455440429:table/e2e-*"
+            ]
+        },
+        {
             "Sid": "AWSCodeCommitSourceReceiveAdapter",
             "Effect": "Allow",
             "Action": [
@@ -167,6 +180,24 @@
             "Effect": "Allow",
             "Action": "cognito-idp:ListUsers",
             "Resource": "arn:aws:cognito-idp:*:043455440429:userpool/*"
+        },
+        {
+            "Sid": "AWSDynamoDBTableSourceReceiveAdapter",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:DescribeTable"
+            ],
+            "Resource": "arn:aws:dynamodb:*:043455440429:table/e2e-*"
+        },
+        {
+            "Sid": "AWSDynamoDBStreamSourceReceiveAdapter",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:GetShardIterator",
+                "dynamodb:DescribeStream",
+                "dynamodb:GetRecords"
+            ],
+            "Resource": "arn:aws:dynamodb:*:043455440429:table/e2e-*/stream/*"
         }
     ]
 }
