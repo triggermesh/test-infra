@@ -44,6 +44,20 @@
             ]
         },
         {
+            "Sid": "E2EFrameworkSNS",
+            "Effect": "Allow",
+            "Action": [
+                "sns:Publish",
+                "sns:CreateTopic",
+                "sns:DeleteTopic",
+                "sns:GetTopicAttributes",
+                "sns:SetTopicAttributes"
+            ],
+            "Resource": [
+                "arn:aws:sns:*:043455440429:e2e-*"
+            ]
+        },
+        {
             "Sid": "E2EFrameworkSQS",
             "Effect": "Allow",
             "Action": [
@@ -97,6 +111,18 @@
             ],
             "Resource": [
                 "arn:aws:codecommit:*:043455440429:e2e-*"
+            ]
+        },
+        {
+            "Sid": "AWSSNSSourceReceiveAdapter",
+            "Effect": "Allow",
+            "Action": [
+                "sns:Subscribe",
+                "sns:Unsubscribe",
+                "sns:ConfirmSubscription"
+            ],
+            "Resource": [
+                "arn:aws:sns:*:043455440429:e2e-*"
             ]
         },
         {
