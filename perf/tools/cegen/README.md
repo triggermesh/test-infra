@@ -36,7 +36,7 @@ To compile the tool from source for your current platform and architecture and r
 
 ## Benchmark
 
-`cegen` is able to output ~110,000 targets/sec to a tmpfs on an Intel Core i5-8265U CPU.
+`cegen` is able to output ~160,000 targets/sec to a tmpfs on an Intel Core i5-8265U CPU.
 
 ```console
 $ mount -t tmpfs -o size=512m tmpfs /mnt/ramdisk/
@@ -49,7 +49,7 @@ $ time (cegen -u http://localhost -d '@2k_payload.txt' > /mnt/ramdisk/out &; pid
 
 ```console
 $ cat /mnt/ramdisk/out | wc -l
-112190
+168640
 ```
 
 [vegeta]: https://github.com/tsenart/vegeta

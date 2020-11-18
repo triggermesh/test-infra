@@ -245,3 +245,21 @@ func TestArgs(t *testing.T) {
 		}
 	})
 }
+
+func BenchmarkGenerate(b *testing.B) {
+	const (
+		url = "http://localhost"
+		typ = "test.event"
+		src = "cegen/go/benchmark"
+	)
+
+	data := bytes.Repeat([]byte{'0'}, 2048)
+
+	g := NewCloudEventTargetsGenerator(url, typ, src, data)
+
+	for i := 0; i < b.N; i++ {
+		if _, err := g.Generate(); err != nil {
+			b.Error("Generate returned an error:", err)
+		}
+	}
+}

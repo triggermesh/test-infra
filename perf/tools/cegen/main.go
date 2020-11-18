@@ -27,8 +27,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
+	"github.com/mailru/easyjson/buffer"
 	jwriter "github.com/mailru/easyjson/jwriter"
 	uuid "github.com/rogpeppe/fastuuid"
 	"github.com/sethvargo/go-signalcontext"
@@ -94,9 +96,6 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 
 var fprintln = fmt.Fprintln
 
-// postGenerateHook is a function that gets called every time a target is
-// printed to stdout. Used for testing the main logic.
-
 // cmdOpts are the options that can be passed to the command.
 type cmdOpts struct {
 	targetURL *string
@@ -155,6 +154,12 @@ func NewCloudEventTargetsGenerator(url, typeAttr, sourceAttr string, data []byte
 	}
 }
 
+// Buffer pool for jwriter.Writer's underlying Buffer and output.
+var writerBufPool *sync.Pool
+
+// Once used to initialize the buffer pool on the first call to Generate.
+var bufOnce sync.Once
+
 // Generate returns a target serialized as JSON.
 func (g *CloudEventTargetsGenerator) Generate() ([]byte, error) {
 	var t jsonTarget
@@ -175,9 +180,32 @@ func (g *CloudEventTargetsGenerator) Generate() ([]byte, error) {
 
 	t.Body = g.data
 
-	// TODO(antoineco): avoid those repetitive allocations
-	var jw jwriter.Writer
-	t.encode(&jw)
+	// encode inside the Once fn to determine the size of buffers in sync pools
+	bufOnce.Do(func() {
+		var jw jwriter.Writer
+		t.encode(&jw)
+		dataBytes, _ := jw.BuildBytes()
+		dataSize := len(dataBytes)
 
-	return jw.BuildBytes()
+		writerBufPool = &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, 0, dataSize)
+			},
+		}
+	})
+
+	writerBuf := writerBufPool.Get().([]byte)
+	buildBuf := writerBufPool.Get().([]byte)
+	defer writerBufPool.Put(buildBuf[:0])
+	defer writerBufPool.Put(writerBuf[:0])
+
+	jw := &jwriter.Writer{
+		Buffer: buffer.Buffer{
+			Buf: writerBuf,
+		},
+	}
+
+	t.encode(jw)
+
+	return jw.BuildBytes(buildBuf)
 }
