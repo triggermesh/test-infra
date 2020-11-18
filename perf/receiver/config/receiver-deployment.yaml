@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
-# This variant deploys 'receiver' as a single Pod, exposed via both an Istio
-# VirtualService and a Kubernetes Service at the respective URLs:
+# This variant deploys 'receiver' as a manually-scalable Deployment, exposed
+# via both an Istio VirtualService and a Kubernetes Service at the respective
+# URLs:
 #
 #  - receiver.<namespace>.svc.cluster.local
 #  - receiver-internal.<namespace>.svc.cluster.local
@@ -69,16 +70,46 @@ spec:
 
 ---
 
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: &app receiver
-  labels:
-    app: *app
 spec:
-  containers:
-  - name: receiver
-    image: ko://receiver
-    ports:
-    - name: cloudevents
-      containerPort: 8080
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: *app
+
+  template:
+    metadata:
+      labels:
+        app: *app
+
+    spec:
+
+      # In production, with n1-standard-2 nodes, the sum of resources requested
+      # by all containers can not exceed the values below, considering the
+      # system-reserved resources and typical DaemonSets such as kube-proxy and
+      # fluentbit:
+      #
+      #  cpu: 1720m
+      #  memory: 5360Mi
+      #
+      containers:
+
+      - name: receiver
+        image: ko://receiver
+        ports:
+        - name: cloudevents
+          containerPort: 8080
+
+        resources:
+          requests:
+            # We set the CPU request as high as possible to ensure the container
+            # receives the highest possible CPU share.
+            # https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#how-pods-with-resource-limits-are-run
+            cpu: 1720m
+            memory: 5360Mi
+          limits:
+            memory: 5360Mi
