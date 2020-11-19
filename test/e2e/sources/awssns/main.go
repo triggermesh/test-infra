@@ -128,7 +128,7 @@ var _ = Describe("AWS SNS source", func() {
 			})
 
 			Specify("the source generates an event", func() {
-				const receiveTimeout = 60 * time.Second
+				const receiveTimeout = 15 * time.Second
 				const pollInterval = 500 * time.Millisecond
 
 				var receivedEvents []cloudevents.Event
