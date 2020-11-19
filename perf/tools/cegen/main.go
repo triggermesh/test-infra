@@ -139,6 +139,9 @@ type CloudEventTargetsGenerator struct {
 	typeAttr   string
 	sourceAttr string
 	data       []byte
+
+	// Once used to initialize the buffer pool on the first call to Generate.
+	bufOnce sync.Once
 }
 
 // NewCloudEventTargetsGenerator returns a generator that yields vegeta JSON
@@ -156,9 +159,6 @@ func NewCloudEventTargetsGenerator(url, typeAttr, sourceAttr string, data []byte
 
 // Buffer pool for jwriter.Writer's underlying Buffer and output.
 var writerBufPool *sync.Pool
-
-// Once used to initialize the buffer pool on the first call to Generate.
-var bufOnce sync.Once
 
 // Generate returns a target serialized as JSON.
 func (g *CloudEventTargetsGenerator) Generate() ([]byte, error) {
@@ -181,7 +181,7 @@ func (g *CloudEventTargetsGenerator) Generate() ([]byte, error) {
 	t.Body = g.data
 
 	// encode inside the Once fn to determine the size of buffers in sync pools
-	bufOnce.Do(func() {
+	g.bufOnce.Do(func() {
 		var jw jwriter.Writer
 		t.encode(&jw)
 		dataBytes, _ := jw.BuildBytes()
