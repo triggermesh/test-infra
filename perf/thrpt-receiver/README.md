@@ -25,6 +25,8 @@ Usage of thrpt-receiver:
    * [Reading results](#reading-results)
    * [Clean up](#clean-up)
 1. [Plotting](#plotting)
+   * [Google Sheets](#google-sheets)
+   * [gnuplot](#gnuplot)
 1. [Profiling](#profiling)
    * [Throughput](#throughput)
    * [Latency](#latency)
@@ -175,16 +177,35 @@ create such visualizations are described in this section.
 
    ![Chart](.assets/plot-gsheets-full-chart.png)
 
+### gnuplot
+
+The provided `throughput.plt` file can be used to plot Mako's CSV results. Those results must be saved to a file called
+`results.csv`.
+
+To generate a graph exported to a PNG file, execute the following command:
+
+```
+$ gnuplot -e "set term png size 1920, 1080" throughput.plt > results.png
+```
+
+See the next section for an example of rendered graph.
+
 ## Profiling
 
 The figures presented in this section describe the profile of a single instance of `thrpt-receiver` running under heavy
 load on a dedicated node in the TriggerMesh production cluster ([GCE n1-standard-2][gce-machines]). Those metrics can be
 used as a baseline to assess the performance of other CloudEvent handlers.
 
-We ensured that the limits of the `thrpt-receiver` process, in particular the maximum number of open files, were high
-enough to sustain a high number of concurrent connections. The number of outgoing connections established by a single
-load generator can not exceed the number of ports available on its host (65536), so we consider any value above that
-number as acceptable for the `nofile` resource limit of the receiver:
+Using the [ramp-requests.py](../load-ramping/) script, a succession of attacks were performed at different rates in
+periods of 5s, ranging from 1 event/sec to 79,432 events/sec (theoretical), with a payload of 2 KiB. The attacker was
+running on a dedicated compute-optimized node ([GCE c2-standard-8][gce-machines]) to avoid exhausting the node's
+resources at an early stage of the attack. The receiver's event store was initialized with a size of 900,000 using the
+`-estimated-total-events` flag.
+
+We ensured that the limits of the `thrpt-receiver` and `vegeta` processes, in particular the maximum number of open
+files, were high enough to sustain a high number of concurrent connections. The number of outgoing connections
+established by a single load generator can not exceed the number of ports available on its host (65536), so we consider
+any value above that number as acceptable for the `nofile` resource limit:
 
 ```
 / # cat /proc/3352/limits
@@ -197,31 +218,117 @@ Max open files            1048576              1048576              files
 
 ### Throughput
 
-_The Go garbage collector was disabled for the entire duration of this load test to prevent GC pauses from influencing
-the results. The event store was initialized with a size of 300,000 using the `-estimated-total-events` flag._
-
-The attack was performed in 5 intervals of 12s, by increments of 1600 events/sec, with a payload of 2 KiB. Below is a
-summary of the attack as reported by [`vegeta`][vegeta].
-
-```
-Requests      [total, rate, throughput]         275124, 4543.47, 4539.96
-Duration      [total, attack, wait]             1m1s, 1m1s, 46.915ms
-Latencies     [min, mean, 50, 90, 95, 99, max]  250.013µs, 152.998ms, 1.134ms, 555.641ms, 911.698ms, 1.36s, 2.412s
-Bytes In      [total, mean]                     0, 0.00
-Bytes Out     [total, mean]                     563453952, 2048.00
-Success       [ratio]                           100.00%
-Status Codes  [code:count]                      200:275124
-Error Set:
-```
-
 The throughput data collected by the Mako sidecar was extracted as a CSV file and displayed in a chart generated using
-Google Sheets. Although vegeta reported a success rate of 100%, we can observe that the thoughput becomes extremely
-unstable between the 4th and 5th intervals, roughly between 6400 and 8000 events/sec.
+gnuplot (see the [gnuplot](#gnuplot) section). We can observe that the throughput becomes extremely unstable at about
+**12,000 events/sec**.
+
+> _It's over 9000!_
 
 ![Receive throughput](.assets/profiling-receive-throughput.png)
 
-During the load test, `thrpt-receiver` was running with the `-profiling` flag so we could extract an execution trace
-from the pprof server and analyze the heap profile of the application:
+The Vegeta report for the 12,589 events/sec attack shows a 100% success ratio, but high latencies above the 90th
+percentile:
+
+```
+Requests      [total, rate, throughput]         62947, 12589.63, 12387.62
+Duration      [total, attack, wait]             5.081s, 5s, 81.532ms
+Latencies     [min, mean, 50, 90, 95, 99, max]  187.316µs, 133.384ms, 14.439ms, 528.109ms, 629.386ms, 1.326s, 2.386s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     128915456, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:62947
+Error Set:
+```
+
+At 15,848 events/sec, we start seeing a few errors and some unacceptably high latencies (median above 1s):
+
+```
+Requests      [total, rate, throughput]         78950, 15787.37, 6784.90
+Duration      [total, attack, wait]             11.512s, 5.001s, 6.511s
+Latencies     [min, mean, 50, 90, 95, 99, max]  319.739µs, 1.474s, 1.527s, 2.703s, 2.851s, 4.029s, 8.418s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     159959040, 2026.08
+Success       [ratio]                           98.93%
+Status Codes  [code:count]                      0:845  200:78105
+Error Set:
+Post "http://thrpt-receiver.perf-thrpt-receiver": read tcp 10.16.51.3:35317->10.19.245.6:80: read: connection reset by
+peer
+Post "http://thrpt-receiver.perf-thrpt-receiver": read tcp 10.16.51.3:52902->10.19.245.6:80: read: connection reset by
+peer
+Post "http://thrpt-receiver.perf-thrpt-receiver": read tcp 10.16.51.3:45288->10.19.245.6:80: read: connection reset by
+peer
+...
+```
+
+Above 19,000 events/sec, our attacker is unable to produce enough requests to keep up with the target, as shown in the
+following reports for 19,953 events/sec and 25,119 events/sec (see the value for `Requests . rate`):
+
+```
+Requests      [total, rate, throughput]         96416, 19283.75, 8150.28
+Duration      [total, attack, wait]             11.774s, 5s, 6.775s
+Latencies     [min, mean, 50, 90, 95, 99, max]  221.071µs, 3.63s, 3.89s, 6.24s, 6.49s, 6.756s, 10.075s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     196536320, 2038.42
+Success       [ratio]                           99.53%
+Status Codes  [code:count]                      0:451  200:95965
+Error Set:
+Post "http://thrpt-receiver.perf-thrpt-receiver": dial tcp 0.0.0.0:0->10.19.245.6:80: bind: address already in use
+
+Requests      [total, rate, throughput]         111869, 22365.76, 3890.88
+Duration      [total, attack, wait]             22.053s, 5.002s, 17.052s
+Latencies     [min, mean, 50, 90, 95, 99, max]  5.248ms, 11.403s, 12.524s, 16.096s, 16.786s, 16.943s, 21.056s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     175732736, 1570.88
+Success       [ratio]                           76.70%
+Status Codes  [code:count]                      0:26062  200:85807
+Error Set:
+Post "http://thrpt-receiver.perf-thrpt-receiver": dial tcp 0.0.0.0:0->10.19.245.6:80: bind: address already in use
+```
+
+Finally, we confirmed the limit of **12,000 events/sec** with a sustained attack (3m) coordinated between 2 event
+senders (2x 6,000 events/s):
+
+_Attacker "vegeta"_
+
+```console
+$ cegen -u http://thrpt-receiver.perf-thrpt-receiver.svc.cluster.local -d @/sample-ce-data.json | vegeta attack -lazy -format json -duration 3m -rate 6000/s | vegeta report
+Requests      [total, rate, throughput]         1080005, 6000.03, 6000.02
+Duration      [total, attack, wait]             3m0s, 3m0s, 309.965µs
+Latencies     [min, mean, 50, 90, 95, 99, max]  175.806µs, 62.058ms, 2.516ms, 116.84ms, 418.284ms, 1.113s, 4.524s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     2211850240, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:1080005
+Error Set:
+```
+
+_Attacker "goku"_
+
+```console
+$ cegen -u http://thrpt-receiver.perf-thrpt-receiver.svc.cluster.local -d @/sample-ce-data.json | vegeta attack -lazy -format json -duration 3m -rate 6000/s | vegeta report
+Requests      [total, rate, throughput]         1080005, 6000.03, 5999.65
+Duration      [total, attack, wait]             3m0s, 3m0s, 11.254ms
+Latencies     [min, mean, 50, 90, 95, 99, max]  175.479µs, 62.069ms, 2.579ms, 119.076ms, 419.17ms, 1.104s, 2.918s
+Bytes In      [total, mean]                     0, 0.00
+Bytes Out     [total, mean]                     2211850240, 2048.00
+Success       [ratio]                           100.00%
+Status Codes  [code:count]                      200:1080005
+Error Set:
+```
+
+### Latency
+
+In the graph below, we can see the first failed requests occuring during the attack at 15,848 events/sec. However, the
+p99 above the 12,000 events/s mark is already consistently above 1s (see the reports for the single and coordinated
+attacks in the previous section).
+
+![Latency profile](.assets/profiling-latencies.png)
+
+### Heap
+
+During an earlier, less agressive load test with the Go garbage collector disabled, `thrpt-receiver` was running with
+the `-profiling` flag so we could extract an execution trace from the pprof server and analyze the heap profile of the
+application:
 
 ```console
 $ kubectl -n perf-thrpt-receiver port-forward thrpt-receiver 8008
@@ -240,99 +347,15 @@ $ go tool trace trace.out
 2020/11/10 21:39:32 Opening browser. Trace viewer is listening on http://127.0.0.1:33877
 ```
 
-In a web browser, we observed an initial heap size of 4.4 MiB. After the 275124 events had been received, 3.5 GiB were
+In a web browser, we observed an initial heap size of 4.4 MiB. After 27,5124 events had been received, 3.5 GiB were
 allocated to the heap. This number went down to 125.7 MiB after the forced garbage collection triggered by
 `thrpt-receiver`.
 
 ![Heap profile after GC](.assets/profiling-heap.png)
 
-### Latency
-
-_Because a lot more events were generated in the latency test than in the thoughput test (969775 vs. 275124), we ensured
-the Go garbage collector was enabled to prevent the Pod performing the attack from being OOM killed._
-
-Using the [ramp-requests.py](../load-ramping/) script, a succession of 5s attacks were performed at different rates,
-ranging from 1 event/sec to 79,432 events/sec (theoretical), with a payload of 2 KiB.
-
-In the graph below, we can observe that all requests succeeded, even in the higher ranges. However, most requests
-(median) above the 8,000 events/sec mark had to wait for more than 1s to get a response from the receiver.
-
-![Latency profile](.assets/profiling-latencies.png)
-
-Vegeta reports indicate that the receiver starts showing severe signs of weakness (wait times >1sec) somewhere between
-8,000 events/sec and 10,000 events/sec:
-
-```
-Requests      [total, rate, throughput]         39693, 7912.43, 7071.79
-Duration      [total, attack, wait]             5.613s, 5.017s, 596.331ms
-Latencies     [min, mean, 50, 90, 95, 99, max]  417.864µs, 489.299ms, 593.072ms, 735.633ms, 759.615ms, 800.473ms, 1.397s
-Bytes In      [total, mean]                     0, 0.00
-Bytes Out     [total, mean]                     81291264, 2048.00
-Success       [ratio]                           100.00%
-Status Codes  [code:count]                      200:39693
-Error Set:
-```
-
-```
-Requests      [total, rate, throughput]         49992, 9989.12, 6506.87
-Duration      [total, attack, wait]             7.683s, 5.005s, 2.678s
-Latencies     [min, mean, 50, 90, 95, 99, max]  598.176µs, 1.481s, 1.496s, 2.594s, 2.648s, 2.724s, 4.554s
-Bytes In      [total, mean]                     0, 0.00
-Bytes Out     [total, mean]                     102383616, 2048.00
-Success       [ratio]                           100.00%
-Status Codes  [code:count]                      200:49992
-Error Set:
-```
-
-On the receiver, the measured throughput never exceeded ~7,000 events/sec, as shown in the graph below which is a
-zoomed-in view of the last ~5s of the attack (at a _theoretical_ rate of 79,432 events/sec).
-
-![Receive throughput during latency test](.assets/profiling-latencies-throughput.png)
-
-In reality, the Vegeta reports of the last few attacks show that the attacker itself isn't able to produce more than
-~20,000 events/sec on that hardware.
-
-For a target of 25,118 events/sec:
-
-```
-Requests      [total, rate, throughput]         101381, 20190.99, 6198.92
-Duration      [total, attack, wait]             16.355s, 5.021s, 11.334s
-Latencies     [min, mean, 50, 90, 95, 99, max]  642.621µs, 6.24s, 6.367s, 10.373s, 10.932s, 11.315s, 15.002s
-Bytes In      [total, mean]                     0, 0.00
-Bytes Out     [total, mean]                     207628288, 2048.00
-Success       [ratio]                           100.00%
-Status Codes  [code:count]                      200:101381
-Error Set:
-```
-
-For a target of 39,810 events/sec:
-
-```
-Requests      [total, rate, throughput]         103667, 20002.61, 6156.27
-Duration      [total, attack, wait]             16.839s, 5.183s, 11.657s
-Latencies     [min, mean, 50, 90, 95, 99, max]  3.121ms, 6.417s, 6.802s, 10.811s, 11.343s, 11.81s, 15.527s
-Bytes In      [total, mean]                     0, 0.00
-Bytes Out     [total, mean]                     212310016, 2048.00
-Success       [ratio]                           100.00%
-Status Codes  [code:count]                      200:103667
-Error Set:
-```
-
-For a target of 50,118 events/sec:
-
-```
-Requests      [total, rate, throughput]         109669, 21870.86, 6144.78
-Duration      [total, attack, wait]             17.848s, 5.014s, 12.833s
-Latencies     [min, mean, 50, 90, 95, 99, max]  390.626µs, 7.392s, 7.892s, 12.029s, 12.302s, 12.779s, 16.851s
-Bytes In      [total, mean]                     0, 0.00
-Bytes Out     [total, mean]                     224602112, 2048.00
-Success       [ratio]                           100.00%
-Status Codes  [code:count]                      200:109669
-Error Set:
-```
-
 [mako-stub]: https://github.com/knative/pkg/tree/release-0.18/test/mako
 [gsheets-ts-formula]: https://webapps.stackexchange.com/a/112651
 [gsheets-fill]: https://support.google.com/docs/answer/75509
+[gnuplot]: http://www.gnuplot.info/
 [vegeta]: https://github.com/tsenart/vegeta
 [gce-machines]: https://cloud.google.com/compute/docs/machine-types
