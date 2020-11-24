@@ -20,7 +20,7 @@
 #  - receiver.<namespace>.svc.cluster.local
 #  - receiver-internal.<namespace>.svc.cluster.local
 #
-# The purpose of this setup is to allow putting Knative's cluster-local-gateway
+# The purpose of this setup is to allow putting Knative's knative-local-gateway
 # under pressure while preventing the receiver to get scaled automatically by
 # Knative Serving.
 
@@ -30,7 +30,7 @@ metadata:
   name: receiver
 spec:
   type: ExternalName
-  externalName: cluster-local-gateway.istio-system.svc.cluster.local
+  externalName: knative-local-gateway.istio-system.svc.cluster.local
   ports:
   - name: http
     port: 80
@@ -46,7 +46,7 @@ spec:
   hosts:
   - receiver # interpreted as receiver.<namespace>.svc.cluster.local
   gateways:
-  - knative-serving/cluster-local-gateway
+  - knative-serving/knative-local-gateway
   http:
   - route:
     - destination:
