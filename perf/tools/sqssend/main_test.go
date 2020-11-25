@@ -31,28 +31,55 @@ import (
 const tCmd = "test"
 
 func TestSend(t *testing.T) {
-	cli := &mockSQSSender{}
-	cg := staticClientGetter(cli)
-
-	var stdout strings.Builder
-	var stderr strings.Builder
-
-	numMsg := 9_999
-	expectReq := 1250 // assuming msgBatchSize is 8
-
-	err := run(cg, []string{tCmd, "-u=http://queue", "-n", strconv.Itoa(numMsg)}, &stdout, &stderr)
-	if err != nil {
-		t.Fatal("Unexpected error: ", err)
+	testCases := []struct {
+		numMsg    int
+		expectReq int
+	}{
+		{
+			numMsg:    0,
+			expectReq: 0,
+		},
+		{
+			numMsg:    1,
+			expectReq: 1,
+		},
+		{
+			numMsg:    msgBatchSize,
+			expectReq: 1,
+		},
+		{
+			numMsg:    msgBatchSize + 1,
+			expectReq: 2,
+		},
+		{
+			numMsg:    9_999,
+			expectReq: 1250, // assuming msgBatchSize is 8
+		},
 	}
 
-	gotReq := cli.reqSent
-	if gotReq != expectReq {
-		t.Errorf("Expected %d requests to be sent, got %d", expectReq, gotReq)
-	}
+	for _, tc := range testCases {
+		t.Run("", func(t *testing.T) {
+			cli := &mockSQSSender{}
+			cg := staticClientGetter(cli)
 
-	gotMsg := cli.msgsSent
-	if gotMsg != numMsg {
-		t.Errorf("Expected %d messages to be sent, got %d", numMsg, gotMsg)
+			var stdout strings.Builder
+			var stderr strings.Builder
+
+			err := run(cg, []string{tCmd, "-u=http://queue", "-n", strconv.Itoa(tc.numMsg)}, &stdout, &stderr)
+			if err != nil {
+				t.Fatal("Unexpected error: ", err)
+			}
+
+			gotReq := cli.reqSent
+			if gotReq != tc.expectReq {
+				t.Errorf("Expected %d requests to be sent, got %d", tc.expectReq, gotReq)
+			}
+
+			gotMsg := cli.msgsSent
+			if gotMsg != tc.numMsg {
+				t.Errorf("Expected %d messages to be sent, got %d", tc.numMsg, gotMsg)
+			}
+		})
 	}
 }
 

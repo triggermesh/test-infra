@@ -157,6 +157,18 @@ func prepareMsgBatches(o *cmdOpts) []*sqs.SendMessageBatchInput {
 
 // sendMsgBatches sends the given message batches concurrently.
 func sendMsgBatches(cli Client, batches []*sqs.SendMessageBatchInput, stdout io.Writer) error {
+	if len(batches) == 0 {
+		return nil
+	}
+
+	// try 1 batch first, and send the rest in bulk only if this succeeded
+	var firstBatch *sqs.SendMessageBatchInput
+	firstBatch, batches = batches[0], batches[1:]
+
+	if _, err := cli.SendMessageBatch(firstBatch); err != nil {
+		return fmt.Errorf("sending first batch of messages: %w", err)
+	}
+
 	errCh := make(chan error, len(batches))
 	defer close(errCh)
 
