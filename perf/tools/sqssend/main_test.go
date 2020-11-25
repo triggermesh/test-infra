@@ -37,7 +37,7 @@ func TestSend(t *testing.T) {
 	var stdout strings.Builder
 	var stderr strings.Builder
 
-	numMsg := 9_999   // some value below maxNumMsgs
+	numMsg := 9_999
 	expectReq := 1250 // assuming msgBatchSize is 8
 
 	err := run(cg, []string{tCmd, "-u=http://queue", "-n", strconv.Itoa(numMsg)}, &stdout, &stderr)
@@ -82,20 +82,6 @@ func TestArgs(t *testing.T) {
 		}
 
 		expectMsg := "invalid queue URL"
-		if errStr := err.Error(); !strings.Contains(errStr, expectMsg) {
-			t.Fatalf("Unexpected error message: %q", errStr)
-		}
-	})
-
-	t.Run("value of -n exceeds limit", func(t *testing.T) {
-		aboveLimit := strconv.FormatUint(uint64(maxNumMsgs)+1, 10)
-
-		err := run(cg, []string{tCmd, "-u=http://queue", "-n", aboveLimit}, &stdout, &stderr)
-		if err == nil {
-			t.Fatal("Expected command to fail")
-		}
-
-		expectMsg := "number of messages " + aboveLimit + " exceeds the maximum"
 		if errStr := err.Error(); !strings.Contains(errStr, expectMsg) {
 			t.Fatalf("Unexpected error message: %q", errStr)
 		}

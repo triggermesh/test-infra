@@ -42,7 +42,6 @@ const (
 	defaultNumMsgs      = 100
 
 	maxMsgSizeBytes uint = maxBatchSizeBytes / msgBatchSize // 32 KiB
-	maxNumMsgs      uint = 10_000
 )
 
 func main() {
@@ -96,10 +95,6 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 		return nil, fmt.Errorf("invalid queue URL: %w", err)
 	}
 
-	if n := *opts.numMsgs; n > maxNumMsgs {
-		return nil, fmt.Errorf("number of messages %d exceeds the maximum of %d", n, maxNumMsgs)
-	}
-
 	if s := *opts.msgSize; s > maxMsgSizeBytes {
 		return nil, fmt.Errorf("message size %d B exceeds the maximum of %d B", s, maxMsgSizeBytes)
 	}
@@ -140,7 +135,7 @@ func prepareMsgBatches(o *cmdOpts) []*sqs.SendMessageBatchInput {
 
 	batches := make([]*sqs.SendMessageBatchInput, 0, calculateNumBatches(*o.numMsgs))
 
-	for i := 0; i < int(*o.numMsgs); i++ {
+	for i := uint(0); i < *o.numMsgs; i++ {
 		if i%msgBatchSize == 0 {
 			batches = append(batches, &sqs.SendMessageBatchInput{
 				Entries:  make([]*sqs.SendMessageBatchRequestEntry, 0, msgBatchSize),
