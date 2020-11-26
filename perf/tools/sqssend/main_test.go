@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"net/url"
 	"strconv"
 	"strings"
@@ -58,14 +59,13 @@ func TestSend(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run("", func(t *testing.T) {
+		t.Run(strconv.Itoa(tc.numMsg)+" message(s)", func(t *testing.T) {
 			cli := &mockSQSSender{}
 			cg := staticClientGetter(cli)
 
-			var stdout strings.Builder
 			var stderr strings.Builder
 
-			err := run(cg, []string{tCmd, "-u=http://queue", "-n", strconv.Itoa(tc.numMsg)}, &stdout, &stderr)
+			err := run(cg, []string{tCmd, "-u=http://queue", "-n", strconv.Itoa(tc.numMsg)}, &stderr)
 			if err != nil {
 				t.Fatal("Unexpected error: ", err)
 			}
@@ -83,15 +83,53 @@ func TestSend(t *testing.T) {
 	}
 }
 
+func TestSendWithError(t *testing.T) {
+	const numRequests = 10
+	const numMsg = msgBatchSize * numRequests
+
+	testCases := []struct {
+		failEvery int
+		expectMsg string
+	}{
+		{
+			failEvery: 1,
+			expectMsg: "sending first batch of " + strconv.Itoa(msgBatchSize) + " messages: fake error",
+		},
+		{
+			failEvery: 3,
+			expectMsg: "sending " + strconv.Itoa(msgBatchSize*(numRequests/3)) + ` messages: ["fake error" `,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run("fail every "+strconv.Itoa(tc.failEvery)+" request(s)", func(t *testing.T) {
+			cli := &mockSQSSender{
+				failEvery: tc.failEvery,
+			}
+			cg := staticClientGetter(cli)
+
+			var stderr strings.Builder
+
+			err := run(cg, []string{tCmd, "-u=http://queue", "-n", strconv.Itoa(numMsg)}, &stderr)
+			if err == nil {
+				t.Fatal("Expected command to fail")
+			}
+
+			if errStr := err.Error(); !strings.Contains(errStr, tc.expectMsg) {
+				t.Fatalf("Unexpected error message: %q", errStr)
+			}
+		})
+	}
+}
+
 func TestArgs(t *testing.T) {
 	cli := &mockSQSSender{}
 	cg := staticClientGetter(cli)
 
-	var stdout strings.Builder
 	var stderr strings.Builder
 
 	t.Run("missing -u flag", func(t *testing.T) {
-		err := run(cg, []string{tCmd}, &stdout, &stderr)
+		err := run(cg, []string{tCmd}, &stderr)
 		if err == nil {
 			t.Fatal("Expected command to fail")
 		}
@@ -103,7 +141,7 @@ func TestArgs(t *testing.T) {
 	})
 
 	t.Run("invalid -u value", func(t *testing.T) {
-		err := run(cg, []string{tCmd, "-u", "://invalid"}, &stdout, &stderr)
+		err := run(cg, []string{tCmd, "-u", "://invalid"}, &stderr)
 		if err == nil {
 			t.Fatal("Expected command to fail")
 		}
@@ -117,7 +155,7 @@ func TestArgs(t *testing.T) {
 	t.Run("value of -s exceeds limit", func(t *testing.T) {
 		aboveLimit := strconv.FormatUint(uint64(maxMsgSizeBytes)+1, 10)
 
-		err := run(cg, []string{tCmd, "-u=http://queue", "-s", aboveLimit}, &stdout, &stderr)
+		err := run(cg, []string{tCmd, "-u=http://queue", "-s", aboveLimit}, &stderr)
 		if err == nil {
 			t.Fatal("Expected command to fail")
 		}
@@ -153,7 +191,7 @@ func TestParseRegionFromQueueURL(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.input.String(), func(t *testing.T) {
+		t.Run(tc.input.Host, func(t *testing.T) {
 			out := parseRegionFromQueueURL(tc.input)
 
 			if out == tc.expect { // both nil, success
@@ -185,15 +223,24 @@ type mockSQSSender struct {
 	sync.Mutex
 	reqSent  int
 	msgsSent int
+
+	failEvery int
 }
 
 func (m *mockSQSSender) SendMessageBatch(in *sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error) {
+	var err error
+
 	if in != nil {
 		m.Lock()
 		m.reqSent++
 		m.msgsSent += len(in.Entries)
+
+		if m.failEvery > 0 && m.reqSent%m.failEvery == 0 {
+			err = errors.New("fake error")
+		}
+
 		m.Unlock()
 	}
 
-	return nil, nil
+	return nil, err
 }

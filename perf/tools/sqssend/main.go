@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -47,13 +49,13 @@ const (
 func main() {
 	cg := &clientGetter{configProvider: session.Must(session.NewSession())}
 
-	if err := run(cg, os.Args, os.Stdout, os.Stderr); err != nil {
+	if err := run(cg, os.Args, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running command: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(cg ClientGetter, args []string, stdout, stderr io.Writer) error {
+func run(cg ClientGetter, args []string, stderr io.Writer) error {
 	cmdName := filepath.Base(args[0])
 
 	flags := flag.NewFlagSet(cmdName, flag.ExitOnError)
@@ -66,7 +68,7 @@ func run(cg ClientGetter, args []string, stdout, stderr io.Writer) error {
 
 	cli := cg.Get(parseRegionFromQueueURL(opts.queueURL))
 
-	return sendMsgBatches(cli, prepareMsgBatches(opts), stdout)
+	return sendMsgBatches(cli, prepareMsgBatches(opts))
 }
 
 // cmdOpts are the options that can be passed to the command.
@@ -156,7 +158,7 @@ func prepareMsgBatches(o *cmdOpts) []*sqs.SendMessageBatchInput {
 }
 
 // sendMsgBatches sends the given message batches concurrently.
-func sendMsgBatches(cli Client, batches []*sqs.SendMessageBatchInput, stdout io.Writer) error {
+func sendMsgBatches(cli Client, batches []*sqs.SendMessageBatchInput) error {
 	if len(batches) == 0 {
 		return nil
 	}
@@ -166,32 +168,69 @@ func sendMsgBatches(cli Client, batches []*sqs.SendMessageBatchInput, stdout io.
 	firstBatch, batches = batches[0], batches[1:]
 
 	if _, err := cli.SendMessageBatch(firstBatch); err != nil {
-		return fmt.Errorf("sending first batch of messages: %w", err)
+		return fmt.Errorf("sending first batch of %d messages: %w", len(firstBatch.Entries), err)
 	}
+
+	batchCh := make(chan *sqs.SendMessageBatchInput)
 
 	errCh := make(chan error, len(batches))
 	defer close(errCh)
 
+	runBatchProcessors(cli, batchCh, errCh)
+
 	for i := range batches {
-		go func(i int) {
-			_, err := cli.SendMessageBatch(batches[i])
-			errCh <- err
-		}(i)
+		batchCh <- batches[i]
 	}
+	close(batchCh)
 
 	var errs []error
+	var failedMsgs int
 
 	for i := 0; i < cap(errCh); i++ {
 		if err := <-errCh; err != nil {
+			if errSend := (&errSendBatch{}); errors.As(err, &errSend) {
+				failedMsgs += errSend.count
+			}
 			errs = append(errs, err)
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("sending messages: %w", &errList{errs: errs})
+		return fmt.Errorf("sending %d messages: %w", failedMsgs, &errList{errs: errs})
 	}
 
 	return nil
+}
+
+// runBatchProcessors runs background task processors that process batches of
+// messages from batchCh and send their results to errCh.
+func runBatchProcessors(cli Client, batchCh <-chan *sqs.SendMessageBatchInput, errCh chan<- error) {
+	// Each processor spends most of its time waiting for the network, so
+	// we can run more than one per thread.
+	const processorPerProc = 4
+
+	for i := 0; i < runtime.GOMAXPROCS(-1)*processorPerProc; i++ {
+		go func() {
+			for {
+				b, ok := <-batchCh
+				if !ok {
+					return
+				}
+
+				_, err := cli.SendMessageBatch(b)
+
+				if err != nil {
+					err = &errSendBatch{
+						count: len(b.Entries),
+						err:   err,
+					}
+				}
+
+				// always write to errCh to notify the batch has been processed
+				errCh <- err
+			}
+		}()
+	}
 }
 
 // Client is an alias for sqsiface.SQSAPI.
@@ -241,4 +280,15 @@ var _ error = (*errList)(nil)
 // Error implements the error interface.
 func (e *errList) Error() string {
 	return fmt.Sprintf("%q", e.errs)
+}
+
+// errSendBatch indicates that a batch of messages couldn't be sent.
+type errSendBatch struct {
+	count int
+	err   error
+}
+
+// Error implements the error interface.
+func (e *errSendBatch) Error() string {
+	return e.err.Error()
 }
