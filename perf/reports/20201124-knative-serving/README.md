@@ -18,8 +18,6 @@ $ cegen -u http://receiver.default.svc.cluster.local -d @/sample-ce-data.json \
   | vegeta report
 ```
 
-
-
 ### Results
 
 _The size of the `user-loads` node pool was set to a fixed size of `20` in order to avoid externally-introduced delays
