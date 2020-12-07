@@ -5,6 +5,12 @@ description: Scaling profile and performance of a Knative Service
 
 ### Conditions
 
+| Component        | Version            |
+| ---------------- | ------------------ |
+| Kubernetes       | `v1.17.12-gke.500` |
+| Knative Serving  | `v0.19.0`          |
+| Istio            | `v1.7.3`           |
+
 * 1 `vegeta` sender running on a dedicated compute-optimized node (GCE [c2-standard-8][gce-machines])
 * [`receiver`][receiver] deployed as a Knative Service running on dedicated `user-loads` nodes (GCE
   [n1-standard-2][gce-machines]). See [Results](#results) for specific configurations.

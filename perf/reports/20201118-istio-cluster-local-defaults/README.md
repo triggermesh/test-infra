@@ -5,6 +5,11 @@ description: Performance profile of the Istio cluster-local gateway with default
 
 ### Conditions
 
+| Component        | Version            |
+| ---------------- | ------------------ |
+| Kubernetes       | `v1.17.12-gke.500` |
+| Istio            | `v1.7.3`           |
+
 * Istio `cluster-local` gateway configured as per [base/istio @ee2f2bf7][config-istio]
   * Production values for resources requests/limits as per [overlays/prod/istio @ee2f2bf7][config-istio-res]
   * Default resource limits of `2` (CPU) and `1Gi` (memory) are implicitly applied

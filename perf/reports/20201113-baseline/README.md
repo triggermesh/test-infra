@@ -5,6 +5,10 @@ description: Baseline performance of user workloads
 
 ### Conditions
 
+| Component        | Version            |
+| ---------------- | ------------------ |
+| Kubernetes       | `v1.17.12-gke.500` |
+
 * 1 `vegeta` sender running on a dedicated compute-optimized node (GCE [c2-standard-8][gce-machines])
 * 1 [`thrpt-receiver`][thrpt-receiver] instances running on dedicated `user-loads` nodes (GCE
   [n1-standard-2][gce-machines])
