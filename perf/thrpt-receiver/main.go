@@ -49,6 +49,8 @@ const (
 
 	queueLengthPollPeriod = 100 * time.Millisecond
 
+	idleConnTimeout = 30 * time.Second
+
 	makoKeyReceiveThroughput = "rt"
 	makoKeyQueueLength       = "q"
 
@@ -103,7 +105,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}()
 	}
 
-	cli, err := cloudeventsClient(*opts.recheckPeriod)
+	cli, err := cloudeventsClient()
 	if err != nil {
 		return fmt.Errorf("creating CloudEvents client: %w", err)
 	}
@@ -226,7 +228,7 @@ func readOpts(f *flag.FlagSet, args []string) (*cmdOpts, error) {
 // In comparison with the client returned by cloudevents.NewDefaultClient, this
 // client doesn't enable tracing and offers a configurable timeout for idle
 // connections.
-func cloudeventsClient(idleConnTimeout time.Duration) (cloudevents.Client, error) {
+func cloudeventsClient() (cloudevents.Client, error) {
 	t := http.DefaultTransport.(*http.Transport)
 	t.IdleConnTimeout = idleConnTimeout
 
@@ -253,7 +255,7 @@ func runHandler(ctx context.Context, h *handler.Handler, doneFn func()) {
 	defer doneFn()
 
 	if err := h.Run(ctx); err != nil {
-		log.Panic("Failure during runtime of CloudEvents handler: %w", err)
+		log.Panic("Failure during runtime of CloudEvents handler: ", err)
 	}
 	log.Print("Stopped CloudEvents handler")
 }
