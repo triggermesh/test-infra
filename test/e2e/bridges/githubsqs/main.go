@@ -19,7 +19,6 @@ package githubsqs
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -141,15 +140,10 @@ var _ = Describe("GitHub to SQS", func() {
 		})
 
 		By("polling the SQS queue", func() {
-			const receiveTimeout = 15 * time.Second
-			const pollInterval = 500 * time.Millisecond
-
 			var receivedMsgs []*sqs.Message
 
-			receiveMessages := receiveMessages(sqsClient, queueURL, &receivedMsgs)
+			receivedMsgs = e2esqs.ReceiveMessages(sqsClient, queueURL)
 
-			Eventually(receiveMessages, receiveTimeout, pollInterval).ShouldNot(BeEmpty(),
-				"A message should have been received in the SQS queue")
 			Expect(receivedMsgs).To(HaveLen(1),
 				"Received %d messages instead of 1", len(receivedMsgs))
 
@@ -341,17 +335,4 @@ func createAWSCredsSecret(c clientset.Interface, namespace string, creds credent
 	}
 
 	return secr
-}
-
-// receiveMessages returns a function that retrieves messages from the given
-// SQS queue and stores the result as the value of the given `receivedMsgs`
-// variable.
-// The returned function signature satisfies the contract expected by
-// gomega.Eventually: no argument and one or more return values.
-func receiveMessages(sqsClient sqsiface.SQSAPI, queueURL string, receivedMsgs *[]*sqs.Message) func() []*sqs.Message {
-	return func() []*sqs.Message {
-		msgs := e2esqs.ReceiveMessages(sqsClient, queueURL)
-		*receivedMsgs = msgs
-		return msgs
-	}
 }
