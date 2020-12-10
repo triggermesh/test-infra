@@ -18,4 +18,5 @@ package sources
 
 import (
 	_ "github.com/triggermesh/test-infra/test/e2e/bridges/githubeventdisplay"
+	_ "github.com/triggermesh/test-infra/test/e2e/bridges/githubsqs"
 )
