@@ -101,6 +101,18 @@
             ]
         },
         {
+            "Sid": "E2EFrameworkCognitoUserPools",
+            "Effect": "Allow",
+            "Action": [
+                "cognito-idp:CreateUserPool",
+                "cognito-idp:AdminCreateUser",
+                "cognito-idp:DeleteUserPool"
+            ],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
             "Sid": "AWSCodeCommitSourceReceiveAdapter",
             "Effect": "Allow",
             "Action": [
@@ -149,6 +161,12 @@
             "Resource": [
                 "arn:aws:kinesis:*:043455440429:stream/e2e-*"
             ]
+        },
+        {
+            "Sid": "AWSCognitoUserPoolSourceReceiveAdapter",
+            "Effect": "Allow",
+            "Action": "cognito-idp:ListUsers",
+            "Resource": "arn:aws:cognito-idp:*:043455440429:userpool/*"
         }
     ]
 }
