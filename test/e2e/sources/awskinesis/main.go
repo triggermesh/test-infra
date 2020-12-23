@@ -132,7 +132,7 @@ var _ = Describe("AWS Kinesis source", func() {
 			})
 
 			Specify("the source generates an event", func() {
-				const receiveTimeout = 10 * time.Second
+				const receiveTimeout = 30 * time.Second
 				const pollInterval = 500 * time.Millisecond
 
 				var receivedEvents []cloudevents.Event

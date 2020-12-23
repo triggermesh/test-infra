@@ -137,7 +137,7 @@ var _ = Describe("GitHub to Event-Display", func() {
 		})
 
 		By("waiting for an event to be received", func() {
-			const receiveTimeout = 10 * time.Second
+			const receiveTimeout = 30 * time.Second
 			const pollInterval = 500 * time.Millisecond
 
 			pingEventReceived := len(receivedEvents) > 0

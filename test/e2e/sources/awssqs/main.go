@@ -130,7 +130,7 @@ var _ = Describe("AWS SQS source", func() {
 			})
 
 			Specify("the source generates an event", func() {
-				const receiveTimeout = 15 * time.Second
+				const receiveTimeout = 30 * time.Second
 				const pollInterval = 500 * time.Millisecond
 
 				var receivedEvents []cloudevents.Event
