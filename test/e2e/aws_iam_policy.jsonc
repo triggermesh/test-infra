@@ -178,7 +178,10 @@
         {
             "Sid": "AWSCognitoUserPoolSourceReceiveAdapter",
             "Effect": "Allow",
-            "Action": "cognito-idp:ListUsers",
+            "Action": [
+                "cognito-idp:DescribeUserPool",
+                "cognito-idp:ListUsers"
+            ],
             "Resource": "arn:aws:cognito-idp:*:043455440429:userpool/*"
         },
         {
