@@ -142,9 +142,19 @@
             "Sid": "AWSSNSSourceReceiveAdapter",
             "Effect": "Allow",
             "Action": [
-                "sns:Subscribe",
-                "sns:Unsubscribe",
                 "sns:ConfirmSubscription"
+            ],
+            "Resource": [
+                "arn:aws:sns:*:043455440429:e2e-*"
+            ]
+        },
+        {
+            "Sid": "AWSSNSSourceReconciler",
+            "Effect": "Allow",
+            "Action": [
+                "sns:ListSubscriptionsByTopic",
+                "sns:Subscribe",
+                "sns:Unsubscribe"
             ],
             "Resource": [
                 "arn:aws:sns:*:043455440429:e2e-*"
