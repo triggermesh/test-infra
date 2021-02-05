@@ -27,6 +27,7 @@ if '-h' in sys.argv or '--help' in sys.argv:
 
 # Log-spaced rates (each ca. +25% (+1dB) of the previous, covering 1/sec to 100k/sec)
 rates = [10.0 ** (i / 10.0) for i in range(50)]
+rates = [501.18723362727246, 630.957344480193, 794.3282347242813, 1000.0, 1258.9254117941675, 1584.893192461114, 1995.2623149688789, 2511.88643150958, 3162.2776601683795, 3981.0717055349733, 5011.872336272725, 6309.57344480193, 7943.282347242814]
 
 # Log-spaced buckets (each ca. +25% (+1dB) of the previous, covering <1us to >10s)
 buckets = [0] + [1e3 * 10.0 ** (i / 10.0) for i in range(71)]

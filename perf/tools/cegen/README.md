@@ -11,7 +11,7 @@ Usage of cegen:
   -d string
      Data to set in generated CloudEvents. Prefix with '@' to read from a file
   -s string
-     Value to set as the CloudEvent source context attribute (default "attackr")
+     Value to set as the CloudEvent source context attribute (default "cegen")
   -t string
      Value to set as the CloudEvent type context attribute (default "io.triggermesh.perf.drill")
   -u string
