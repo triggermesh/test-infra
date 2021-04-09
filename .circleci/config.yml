@@ -1,20 +1,39 @@
 version: 2.1
 
 orbs:
-  go: circleci/go@1.4.0
-  gcp-gke: circleci/gcp-gke@1.1.0
-  slack: circleci/slack@4.0.2
+  aws-eks: circleci/aws-eks@1
+  gcp-gke: circleci/gcp-gke@1
+  go: circleci/go@1
+  k8s: circleci/kubernetes@0
+  slack: circleci/slack@4
 
 jobs:
   e2e:
     executor:
       name: go/default
       tag: '1.15'
+    parameters:
+      platform:
+        type: string
+        default: gke
     steps:
       - checkout
-      - gcp-gke/update-kubeconfig-with-credentials:
-          perform-login: true
-          cluster: $GOOGLE_CLUSTER_NAME
+      - when:
+          condition:
+            or:
+              - equal: [ gke, << parameters.platform >> ]
+          steps:
+            - gcp-gke/update-kubeconfig-with-credentials:
+                perform-login: true
+                cluster: $GOOGLE_CLUSTER_NAME
+      - when:
+          condition:
+            or:
+              - equal: [ eks, << parameters.platform >> ]
+          steps:
+            - aws-eks/update-kubeconfig-with-authenticator:
+                cluster-name: $AWS_CLUSTER_NAME
+                aws-region: $AWS_REGION
       - run:
           name: Running e2e tests
           environment:
@@ -67,18 +86,14 @@ workflows:
       - e2e:
           name: e2e-staging
           context: staging
-
-  prod:
-    jobs:
-      - e2e:
-          name: e2e-prod
-          context: production
+          platform: eks
 
   staging-nightly:
     jobs:
       - e2e:
           name: e2e-staging-nightly
           context: staging
+          platform: eks
     triggers:
       - schedule:
           cron: "0 0 * * *"
@@ -87,11 +102,19 @@ workflows:
               only:
                 - main
 
+  prod:
+    jobs:
+      - e2e:
+          name: e2e-prod
+          context: production
+          platform: gke
+
   prod-nightly:
     jobs:
       - e2e:
           name: e2e-prod-nightly
           context: production
+          platform: gke
     triggers:
       - schedule:
           cron: "0 0 * * *"
