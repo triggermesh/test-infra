@@ -17,6 +17,6 @@
 E2E_PACKAGES     := ./
 E2E_PASSTHROUGHS ?=
 
-override E2E_FLAGS += -nodes=4 -slowSpecThreshold=60 -randomizeAllSpecs
+override E2E_FLAGS += -nodes=1 -slowSpecThreshold=60 -randomizeAllSpecs -v
 e2e:
 	@go run github.com/onsi/ginkgo/ginkgo $(E2E_FLAGS) $(E2E_PACKAGES) -- $(E2E_PASSTHROUGHS)
