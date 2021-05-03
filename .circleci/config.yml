@@ -41,7 +41,7 @@ jobs:
           command: |
             make -C test/e2e e2e
       - slack/notify:
-          event: always
+          event: fail
           branch_pattern: unparallelize-test
           mentions: "@sameersbn"
           channel: 'C020PQRC867'
@@ -52,7 +52,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":warning: Your job *${CIRCLE_PROJECT_REPONAME}/${CIRCLE_JOB}* has failed :bomb:cc ${SLACK_PARAM_MENTIONS}"
+                    "text": ":warning: Your job *${CIRCLE_PROJECT_REPONAME}/${CIRCLE_JOB}* has failed :bomb: cc ${SLACK_PARAM_MENTIONS}"
                   }
                 },
                 {
