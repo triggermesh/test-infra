@@ -41,8 +41,8 @@ jobs:
           command: |
             make -C test/e2e e2e
       - slack/notify:
-          event: fail
-          branch_pattern: main
+          event: always
+          branch_pattern: unparallelize-test
           mentions: "@sameersbn"
           channel: 'DVBHG4GSG'
           custom: |
