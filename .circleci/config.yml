@@ -44,7 +44,7 @@ jobs:
           event: always
           branch_pattern: unparallelize-test
           mentions: "@sameersbn"
-          channel: 'DVBHG4GSG'
+          channel: 'C020PQRC867'
           custom: |
             {
               "blocks": [
