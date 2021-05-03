@@ -43,7 +43,8 @@ jobs:
       - slack/notify:
           event: fail
           branch_pattern: main
-          mentions: "@engineering"
+          mentions: "@sameersbn"
+          channel: 'DVBHG4GSG'
           custom: |
             {
               "blocks": [
@@ -51,7 +52,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":warning: Your job *${CIRCLE_PROJECT_REPONAME}/${CIRCLE_JOB}* has failed :bomb:\\ncc ${SLACK_PARAM_MENTIONS}"
+                    "text": ":warning: Your job *${CIRCLE_PROJECT_REPONAME}/${CIRCLE_JOB}* has failed :bomb:cc ${SLACK_PARAM_MENTIONS}"
                   }
                 },
                 {
