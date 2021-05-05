@@ -61,8 +61,8 @@ const bridgeResource = "bridges"
 
 const ghApiTokenSecretKey = "apiToken"
 
-const awsAccessKeyIDSecretKey = "aws_access_key_id"
-const awsSecretAccessKeySecretKey = "aws_secret_access_key"
+const awsAccessKeyIDSecretKey = "access_key_id"
+const awsSecretAccessKeySecretKey = "secret_access_key"
 
 var _ = Describe("GitHub to SQS", func() {
 	f := framework.New("github-sqs")
