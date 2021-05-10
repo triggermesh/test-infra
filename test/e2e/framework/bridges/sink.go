@@ -45,7 +45,7 @@ import (
 
 const (
 	eventDisplayName           = "event-display"
-	eventDisplayContainerImage = "gcr.io/knative-releases/knative.dev/eventing-contrib/cmd/event_display:latest"
+	eventDisplayContainerImage = "gcr.io/knative-releases/knative.dev/eventing-contrib/cmd/event_display@sha256:a4c088d4e48eaac7dc6de0dc3ef3fa4ed3e8f224baa4c2937f11061d380df430"
 )
 
 // CreateEventDisplaySink creates an event-display event sink and returns it as
