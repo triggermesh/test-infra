@@ -23,4 +23,5 @@ import (
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awskinesis"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssns"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssqs"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/webhook"
 )
