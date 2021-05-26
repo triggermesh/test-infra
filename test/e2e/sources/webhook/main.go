@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -72,6 +72,13 @@ var _ = Describe("Webhook source", func() {
 	Context("a source receives an HTTP request", func() {
 		var srcURL *url.URL
 
+		// sample payload struct and instance to be
+		// sent at the WebhookSource URL
+		type Payload struct {
+			Message string
+		}
+		testPayload := Payload{"test"}
+
 		BeforeEach(func() {
 			eventType = "test.event.type"
 			eventSource = "test.event.source"
@@ -91,21 +98,13 @@ var _ = Describe("Webhook source", func() {
 
 				srcURL = ducktypes.Address(src)
 				Expect(srcURL).ToNot(BeNil())
-
-				// FIXME(antoineco): without this short pause, the receive adapter throws the following
-				// error when sending the event:
-				//
-				//   Sending HTTP event
-				//   Post "http://event-display.{...}": dial tcp 10.x.x.x:80: connect: connection refused
-				//
-				time.Sleep(5 * time.Second)
 			})
 		})
 
 		When("an HTTP request is received", func() {
 
 			BeforeEach(func() {
-				http.PostJSONRequest(srcURL.String(), []byte(`{"hello","world"}`))
+				http.PostJSONRequest(srcURL.String(), testPayload)
 			})
 
 			Specify("the source generates an event", func() {
@@ -123,6 +122,11 @@ var _ = Describe("Webhook source", func() {
 
 				Expect(e.Type()).To(Equal(eventType))
 				Expect(e.Source()).To(Equal(eventSource))
+
+				tp := Payload{}
+				err := e.DataAs(&tp)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tp).To(Equal(testPayload))
 			})
 		})
 	})

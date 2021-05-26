@@ -19,14 +19,21 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 
+	"github.com/cloudevents/sdk-go/v2/event/datacodec/json"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
 // PostJSONRequest send an arbitraty JSON payload to an endpoint.
-func PostJSONRequest(url string, payload []byte) {
-	res, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+func PostJSONRequest(url string, payload interface{}) {
+	p, err := json.Encode(context.Background(), payload)
+	if err != nil {
+		framework.FailfWithOffset(2, "Error JSON encoding payload: %s", err)
+	}
+
+	res, err := http.Post(url, "application/json", bytes.NewBuffer(p))
 	if err != nil {
 		framework.FailfWithOffset(2, "Error Posting to %s: %s", url, err)
 	}
