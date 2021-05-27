@@ -110,7 +110,7 @@ var _ = Describe("AWS SNS source", func() {
 				//   Failed to send CloudEvent:
 				//   Post "http://event-display.{...}": dial tcp 10.x.x.x:80: connect: connection refused
 				//
-				time.Sleep(20 * time.Second)
+				time.Sleep(5 * time.Second)
 			})
 		})
 
