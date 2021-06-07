@@ -1,48 +1,6 @@
-/* AWS IAM policy for e2e tests.
-
-   Policy ARN:  arn:aws:iam::043455440429:policy/EndToEndTestSuite
-   Description: Set of permissions required by the TriggerMesh end-to-end test suite to run tests that manipulate AWS resources.
-*/
 {
     "Version": "2012-10-17",
     "Statement": [
-        {
-            "Sid": "E2EFrameworkEventBridgeEventBuses",
-            "Effect": "Allow",
-            "Action": [
-                "events:CreateEventBus",
-                "events:DeleteEventBus",
-                "events:TagResource"
-            ],
-            "Resource": [
-                "arn:aws:events:*:043455440429:event-bus/aws.partner/triggermesh.com/*"
-            ]
-        },
-        {
-            "Sid": "E2EFrameworkEventBridgeRules",
-            "Effect": "Allow",
-            "Action": [
-                "events:PutRule",
-                "events:DeleteRule",
-                "events:ListTargetsByRule",
-                "events:PutTargets",
-                "events:RemoveTargets",
-                "events:TagResource"
-            ],
-            "Resource": [
-                "arn:aws:events:*:043455440429:rule/aws.partner/triggermesh.com/*"
-            ]
-        },
-        {
-            "Sid": "E2EFrameworkEventBridgeEventSources",
-            "Effect": "Allow",
-            "Action": [
-                "events:DescribeEventSource"
-            ],
-            "Resource": [
-                "arn:aws:events:*::event-source/aws.partner/triggermesh.com/*"
-            ]
-        },
         {
             "Sid": "E2EFrameworkSNS",
             "Effect": "Allow",
@@ -54,7 +12,7 @@
                 "sns:SetTopicAttributes"
             ],
             "Resource": [
-                "arn:aws:sns:*:043455440429:e2e-*"
+                "arn:aws:sns:*:*:e2e-*"
             ]
         },
         {
@@ -70,7 +28,7 @@
                 "sqs:TagQueue"
             ],
             "Resource": [
-                "arn:aws:sqs:*:043455440429:e2e-*"
+                "arn:aws:sqs:*:*:e2e-*"
             ]
         },
         {
@@ -84,7 +42,7 @@
                 "codecommit:TagResource"
             ],
             "Resource": [
-                "arn:aws:codecommit:*:043455440429:e2e-*"
+                "arn:aws:codecommit:*:*:e2e-*"
             ]
         },
         {
@@ -97,7 +55,7 @@
                 "kinesis:DescribeStream"
             ],
             "Resource": [
-                "arn:aws:kinesis:*:043455440429:stream/e2e-*"
+                "arn:aws:kinesis:*:*:stream/e2e-*"
             ]
         },
         {
@@ -122,7 +80,7 @@
                 "dynamodb:PutItem"
             ],
             "Resource": [
-                "arn:aws:dynamodb:*:043455440429:table/e2e-*"
+                "arn:aws:dynamodb:*:*:table/e2e-*"
             ]
         },
         {
@@ -135,7 +93,7 @@
                 "codecommit:GetPullRequest"
             ],
             "Resource": [
-                "arn:aws:codecommit:*:043455440429:e2e-*"
+                "arn:aws:codecommit:*:*:e2e-*"
             ]
         },
         {
@@ -145,7 +103,7 @@
                 "sns:ConfirmSubscription"
             ],
             "Resource": [
-                "arn:aws:sns:*:043455440429:e2e-*"
+                "arn:aws:sns:*:*:e2e-*"
             ]
         },
         {
@@ -157,7 +115,7 @@
                 "sns:Unsubscribe"
             ],
             "Resource": [
-                "arn:aws:sns:*:043455440429:e2e-*"
+                "arn:aws:sns:*:*:e2e-*"
             ]
         },
         {
@@ -170,7 +128,7 @@
                 "sqs:DeleteMessageBatch"
             ],
             "Resource": [
-                "arn:aws:sqs:*:043455440429:e2e-*"
+                "arn:aws:sqs:*:*:e2e-*"
             ]
         },
         {
@@ -182,7 +140,7 @@
                 "kinesis:GetRecords"
             ],
             "Resource": [
-                "arn:aws:kinesis:*:043455440429:stream/e2e-*"
+                "arn:aws:kinesis:*:*:stream/e2e-*"
             ]
         },
         {
@@ -192,7 +150,7 @@
                 "cognito-idp:DescribeUserPool",
                 "cognito-idp:ListUsers"
             ],
-            "Resource": "arn:aws:cognito-idp:*:043455440429:userpool/*"
+            "Resource": "arn:aws:cognito-idp:*:*:userpool/*"
         },
         {
             "Sid": "AWSDynamoDBTableSourceReceiveAdapter",
@@ -200,7 +158,7 @@
             "Action": [
                 "dynamodb:DescribeTable"
             ],
-            "Resource": "arn:aws:dynamodb:*:043455440429:table/e2e-*"
+            "Resource": "arn:aws:dynamodb:*:*:table/e2e-*"
         },
         {
             "Sid": "AWSDynamoDBStreamSourceReceiveAdapter",
@@ -210,7 +168,7 @@
                 "dynamodb:DescribeStream",
                 "dynamodb:GetRecords"
             ],
-            "Resource": "arn:aws:dynamodb:*:043455440429:table/e2e-*/stream/*"
+            "Resource": "arn:aws:dynamodb:*:*:table/e2e-*/stream/*"
         }
     ]
 }

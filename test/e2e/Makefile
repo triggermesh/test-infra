@@ -15,7 +15,7 @@
 .PHONY: e2e
 
 E2E_PACKAGES     := ./
-E2E_PASSTHROUGHS ?=
+E2E_PASSTHROUGHS ?= "-e2e.kubeconfig=${HOME}/.kube/config"
 
 override E2E_FLAGS += -nodes=4 -slowSpecThreshold=60 -randomizeAllSpecs
 e2e:
