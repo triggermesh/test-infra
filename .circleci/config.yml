@@ -107,14 +107,14 @@ workflows:
       - e2e:
           name: e2e-prod
           context: production
-          platform: gke
+          platform: eks
 
   prod-nightly:
     jobs:
       - e2e:
           name: e2e-prod-nightly
           context: production
-          platform: gke
+          platform: eks
     triggers:
       - schedule:
           cron: "0 0 * * *"
