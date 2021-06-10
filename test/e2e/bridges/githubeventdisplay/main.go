@@ -97,6 +97,9 @@ var _ = Describe("GitHub to Event-Display", func() {
 
 			ducktypes.WaitUntilReady(f.DynamicClient, brdg)
 
+			ed := bridges.EventDisplayKsvc(f.DynamicClient, ns)
+			ducktypes.WaitUntilStatusURL(f.DynamicClient, ed)
+
 			eventDisplayDeplName = bridges.EventDisplayDeploymentName(f.DynamicClient, ns)
 		})
 	})
