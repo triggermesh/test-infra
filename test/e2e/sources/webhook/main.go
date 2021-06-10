@@ -94,7 +94,7 @@ var _ = Describe("Webhook source", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				src = ducktypes.WaitUntilReady(f.DynamicClient, src)
+				src = ducktypes.WaitUntilAddressable(f.DynamicClient, src)
 
 				srcURL = ducktypes.Address(src)
 				Expect(srcURL).ToNot(BeNil())
@@ -102,9 +102,8 @@ var _ = Describe("Webhook source", func() {
 		})
 
 		When("an HTTP request is received", func() {
-
 			BeforeEach(func() {
-				http.PostJSONRequest(srcURL.String(), testPayload)
+				http.PostJSONRequestWithRetries(5*time.Second, 1*time.Minute, srcURL.String(), testPayload)
 			})
 
 			Specify("the source generates an event", func() {

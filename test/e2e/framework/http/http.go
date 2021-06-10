@@ -20,10 +20,13 @@ package http
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/cloudevents/sdk-go/v2/event/datacodec/json"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // PostJSONRequest send an arbitraty JSON payload to an endpoint.
@@ -40,5 +43,29 @@ func PostJSONRequest(url string, payload interface{}) {
 
 	if res.StatusCode >= 400 {
 		framework.FailfWithOffset(2, "Posting to %s returned error code %d", url, res.StatusCode)
+	}
+}
+
+// PostJSONRequestWithRetries send an arbitraty JSON payload to an endpoint.
+func PostJSONRequestWithRetries(interval, timeout time.Duration, url string, payload interface{}) {
+	if err := wait.Poll(interval, timeout, postJSONRequestSucceed(url, payload)); err != nil {
+		framework.FailfWithOffset(2, "Error Posting to %s: %s", url, err)
+	}
+}
+
+func postJSONRequestSucceed(url string, payload interface{}) wait.ConditionFunc {
+	p, err := json.Encode(context.Background(), payload)
+	if err != nil {
+		framework.FailfWithOffset(2, "Error JSON encoding payload: %s", err)
+	}
+	return func() (bool, error) {
+		res, err := http.Post(url, "application/json", bytes.NewBuffer(p))
+		if err != nil {
+			return false, nil
+		}
+		if res.StatusCode >= 400 {
+			return false, fmt.Errorf("posting to %s returned error code %d", url, res.StatusCode)
+		}
+		return true, nil
 	}
 }

@@ -102,7 +102,7 @@ var _ = Describe("AWS SNS source", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				ducktypes.WaitUntilReady(f.DynamicClient, src)
+				ducktypes.WaitUntilAddressable(f.DynamicClient, src)
 
 				// FIXME(antoineco): without this short pause, the receive adapter throws the following
 				// error when sending the event:
