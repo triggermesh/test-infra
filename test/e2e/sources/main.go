@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,4 +23,5 @@ import (
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awskinesis"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssns"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssqs"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/webhook"
 )

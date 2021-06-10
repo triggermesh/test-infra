@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package awssns
+package webhook
 
 import (
 	"context"
+	"net/url"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -31,25 +32,14 @@ import (
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sns"
-	"github.com/aws/aws-sdk-go/service/sns/snsiface"
-
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
-	e2esns "github.com/triggermesh/test-infra/test/e2e/framework/aws/sns"
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
+	"github.com/triggermesh/test-infra/test/e2e/framework/http"
 )
-
-/* This test suite requires:
-
-   - AWS credentials in whichever form (https://docs.aws.amazon.com/sdk-for-go/api/aws/session/#hdr-Sessions_options_from_Shared_Config)
-   - The name of an AWS region exported in the environment as AWS_REGION
-*/
 
 var sourceAPIVersion = schema.GroupVersion{
 	Group:   "sources.triggermesh.io",
@@ -57,19 +47,19 @@ var sourceAPIVersion = schema.GroupVersion{
 }
 
 const (
-	sourceKind     = "AWSSNSSource"
-	sourceResource = "awssnssources"
+	sourceKind     = "WebhookSource"
+	sourceResource = "webhooksources"
 )
 
-var _ = Describe("AWS SNS source", func() {
-	f := framework.New("awssnssource")
+var _ = Describe("Webhook source", func() {
+	f := framework.New("webhooksource")
 
 	var ns string
 
 	var srcClient dynamic.ResourceInterface
 
-	var topicARN string
-	var awsCreds credentials.Value
+	var eventType string
+	var eventSource string
 	var sink *duckv1.Destination
 
 	BeforeEach(func() {
@@ -79,52 +69,41 @@ var _ = Describe("AWS SNS source", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 	})
 
-	Context("a source watches an existing topic", func() {
-		var snsClient snsiface.SNSAPI
+	Context("a source receives an HTTP request", func() {
+		var srcURL *url.URL
+
+		// sample payload struct and instance to be
+		// sent at the WebhookSource URL
+		type Payload struct {
+			Message string
+		}
+		testPayload := Payload{"test"}
 
 		BeforeEach(func() {
-			sess := session.Must(session.NewSession())
-			snsClient = sns.New(sess)
-			awsCreds = readAWSCredentials(sess)
+			eventType = "test.event.type"
+			eventSource = "test.event.source"
 
 			By("creating an event sink", func() {
 				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 			})
 
-			By("creating a SNS topic", func() {
-				topicARN = e2esns.CreateTopic(snsClient, f)
-			})
-
-			By("creating an AWSSNSSource object", func() {
+			By("creating an WebhookSource object", func() {
 				src, err := createSource(srcClient, ns, "test-", sink,
-					withARN(topicARN),
-					withCredentials(awsCreds),
+					withEventType(eventType),
+					withEventSource(eventSource),
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				ducktypes.WaitUntilAddressable(f.DynamicClient, src)
+				src = ducktypes.WaitUntilAddressable(f.DynamicClient, src)
 
-				// FIXME(antoineco): without this short pause, the receive adapter throws the following
-				// error when sending the event:
-				//
-				//   Failed to send CloudEvent:
-				//   Post "http://event-display.{...}": dial tcp 10.x.x.x:80: connect: connection refused
-				//
-				time.Sleep(5 * time.Second)
+				srcURL = ducktypes.Address(src)
+				Expect(srcURL).ToNot(BeNil())
 			})
 		})
 
-		AfterEach(func() {
-			By("deleting SNS topic "+topicARN, func() {
-				e2esns.DeleteTopic(snsClient, topicARN)
-			})
-		})
-
-		When("a message is published to the topic", func() {
-			var msgID string
-
+		When("an HTTP request is received", func() {
 			BeforeEach(func() {
-				msgID = e2esns.SendMessage(snsClient, topicARN)
+				http.PostJSONRequestWithRetries(5*time.Second, 1*time.Minute, srcURL.String(), testPayload)
 			})
 
 			Specify("the source generates an event", func() {
@@ -140,9 +119,13 @@ var _ = Describe("AWS SNS source", func() {
 
 				e := receivedEvents[0]
 
-				Expect(e.Type()).To(Equal("com.amazon.sns.notification"))
-				Expect(e.ID()).To(Equal(msgID))
-				Expect(e.Source()).To(Equal(topicARN))
+				Expect(e.Type()).To(Equal(eventType))
+				Expect(e.Source()).To(Equal(eventSource))
+
+				tp := Payload{}
+				err := e.DataAs(&tp)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tp).To(Equal(testPayload))
 			})
 		})
 	})
@@ -151,13 +134,6 @@ var _ = Describe("AWS SNS source", func() {
 
 		// Those tests do not require a real repository or sink
 		BeforeEach(func() {
-			topicARN = "arn:aws:sns:us-west-2:123456789012:fake-topic"
-
-			awsCreds = credentials.Value{
-				AccessKeyID:     "fake",
-				SecretAccessKey: "fake",
-			}
-
 			sink = &duckv1.Destination{
 				Ref: &duckv1.KReference{
 					APIVersion: "fake/v1",
@@ -174,31 +150,16 @@ var _ = Describe("AWS SNS source", func() {
 		// to avoid creating a namespace for each spec, due to their simplicity.
 		Specify("the API server rejects the creation of that object", func() {
 
-			By("setting an invalid ARN", func() {
-				invalidARN := "arn:aws:sns:invalid::"
-
-				_, err := createSource(srcClient, ns, "test-invalid-arn-", sink,
-					withARN(invalidARN),
-					withCredentials(awsCreds),
-				)
+			By("not setting an event type", func() {
+				_, err := createSource(srcClient, ns, "test-", sink)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("spec.arn: Invalid value: "))
-			})
-
-			By("setting empty credentials", func() {
-				_, err := createSource(srcClient, ns, "test-nocreds-", sink,
-					withARN(topicARN),
-					withCredentials(credentials.Value{}),
-				)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(
-					`"spec.credentials.accessKeyID" must validate one and only one schema (oneOf).`))
+				Expect(err.Error()).To(ContainSubstring("spec.eventType: Required value"))
 			})
 		})
 	})
 })
 
-// createSource creates an AWSSNSSource object initialized with the given options.
+// createSource creates a WebhookSource object initialized with the given options.
 func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
 	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
 
@@ -221,40 +182,20 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 type sourceOption func(*unstructured.Unstructured)
 
-func withARN(arn string) sourceOption {
+func withEventType(eventType string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, arn, "spec", "arn"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.arn field: %s", err)
+		if err := unstructured.SetNestedField(src.Object, eventType, "spec", "eventType"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.eventType field: %s", err)
 		}
 	}
 }
 
-func withCredentials(creds credentials.Value) sourceOption {
-	credsMap := map[string]interface{}{
-		"accessKeyID":     map[string]interface{}{},
-		"secretAccessKey": map[string]interface{}{},
-	}
-	if creds.AccessKeyID != "" {
-		credsMap["accessKeyID"] = map[string]interface{}{"value": creds.AccessKeyID}
-	}
-	if creds.SecretAccessKey != "" {
-		credsMap["secretAccessKey"] = map[string]interface{}{"value": creds.SecretAccessKey}
-	}
-
+func withEventSource(eventSource string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "credentials"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.credentials field: %s", err)
+		if err := unstructured.SetNestedField(src.Object, eventSource, "spec", "eventSource"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.eventSource field: %s", err)
 		}
 	}
-}
-
-func readAWSCredentials(sess *session.Session) credentials.Value {
-	creds, err := sess.Config.Credentials.Get()
-	if err != nil {
-		framework.FailfWithOffset(2, "Error reading AWS credentials: %s", err)
-	}
-
-	return creds
 }
 
 // readReceivedEvents returns a function that reads CloudEvents received by the

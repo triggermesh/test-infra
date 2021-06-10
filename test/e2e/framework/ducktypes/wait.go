@@ -18,6 +18,8 @@ package ducktypes
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
@@ -40,6 +43,16 @@ import (
 
 // WaitUntilReady waits until the given resource's status becomes ready.
 func WaitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured) *unstructured.Unstructured {
+	return waitUntilReady(c, obj, objectReadyCondition)
+}
+
+// WaitUntilAddressable waits until the given resource's status becomes ready.
+func WaitUntilAddressable(c dynamic.Interface, obj *unstructured.Unstructured) *unstructured.Unstructured {
+	return waitUntilReady(c, obj, objectAddressableCondition)
+}
+
+// waitUntilReady waits until the given resource's status becomes ready.
+func waitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured, watchCondition objectWatchCondition) *unstructured.Unstructured {
 	fieldSelector := fields.OneTermEqualSelector("metadata.name", obj.GetName()).String()
 	gvr, _ := meta.UnsafeGuessKindToResource(obj.GroupVersionKind())
 
@@ -54,9 +67,24 @@ func WaitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured) *unstru
 		},
 	}
 
-	// checks whether the object referenced in the given watch.Event has
-	// its Ready condition set to True.
-	var isResourceReady watchtools.ConditionFunc = func(e watch.Event) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	lastEvent, err := watchtools.UntilWithSync(ctx, lw, obj, nil, watchCondition(gvr, obj))
+	if err != nil {
+		framework.FailfWithOffset(2, "Error waiting for resource %s %q to become ready: %s",
+			gvr.GroupResource(), obj.GetName(), err)
+	}
+
+	return lastEvent.Object.(*unstructured.Unstructured)
+}
+
+type objectWatchCondition func(gvr schema.GroupVersionResource, obj *unstructured.Unstructured) watchtools.ConditionFunc
+
+// objectReadyCondition checks whether the object referenced in the given watch.Event has
+// its Ready condition set to True.
+func objectReadyCondition(gvr schema.GroupVersionResource, obj *unstructured.Unstructured) watchtools.ConditionFunc {
+	return func(e watch.Event) (bool, error) {
 		if e.Type == watch.Deleted {
 			return false, apierrors.NewNotFound(gvr.GroupResource(), obj.GetName())
 		}
@@ -74,15 +102,48 @@ func WaitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured) *unstru
 
 		return false, nil
 	}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
+// objectAddressableCondition checks whether the object referenced in the given watch.Event has
+// its Ready condition, is addressable and the address is reachable.
+func objectAddressableCondition(gvr schema.GroupVersionResource, obj *unstructured.Unstructured) watchtools.ConditionFunc {
+	return func(e watch.Event) (bool, error) {
+		if e.Type == watch.Deleted {
+			return false, apierrors.NewNotFound(gvr.GroupResource(), obj.GetName())
+		}
 
-	lastEvent, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isResourceReady)
-	if err != nil {
-		framework.FailfWithOffset(2, "Error waiting for resource %s %q to become ready: %s",
-			gvr.GroupResource(), obj.GetName(), err)
+		if u, ok := e.Object.(*unstructured.Unstructured); ok {
+			url := AddressOrNil(u)
+			if url == nil {
+				return false, nil
+			}
+
+			port := url.Port()
+			if port == "" {
+				switch url.Scheme {
+				case "https":
+					port = "443"
+				case "http":
+					port = "80"
+				default:
+					return false, fmt.Errorf("unsupported URL schema %q", url.Scheme)
+				}
+			}
+			conn, err := net.Dial("tcp", net.JoinHostPort(url.Host, port))
+			if err != nil {
+				return false, nil
+			}
+			conn.Close()
+
+			res := &duckv1.KResource{}
+			if err := duck.FromUnstructured(u, res); err != nil {
+				framework.FailfWithOffset(2, "Failed to convert unstructured object to KResource: %s", err)
+			}
+
+			if cond := res.Status.GetCondition(apis.ConditionReady); cond != nil && cond.IsTrue() {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
-
-	return lastEvent.Object.(*unstructured.Unstructured)
 }
