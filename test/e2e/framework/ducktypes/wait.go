@@ -67,7 +67,7 @@ func waitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured, watchCo
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	lastEvent, err := watchtools.UntilWithSync(ctx, lw, obj, nil, watchCondition(gvr, obj))
@@ -113,27 +113,23 @@ func objectAddressableCondition(gvr schema.GroupVersionResource, obj *unstructur
 		}
 
 		if u, ok := e.Object.(*unstructured.Unstructured); ok {
-			ad := &duckv1.Addressable{}
-			if err := duck.FromUnstructured(u, ad); err != nil {
-				framework.FailfWithOffset(2, "Failed to convert unstructured object to Addressable: %s", err)
-			}
-
-			if ad.URL == nil {
+			url := AddressOrNil(u)
+			if url == nil {
 				return false, nil
 			}
 
-			port := ad.URL.URL().Port()
+			port := url.Port()
 			if port == "" {
-				switch ad.URL.Scheme {
+				switch url.Scheme {
 				case "https":
 					port = "443"
 				case "http":
 					port = "80"
 				default:
-					return false, fmt.Errorf("unsupported URL schema %q", ad.URL.Scheme)
+					return false, fmt.Errorf("unsupported URL schema %q", url.Scheme)
 				}
 			}
-			conn, err := net.Dial("tcp", net.JoinHostPort(ad.URL.Host, port))
+			conn, err := net.Dial("tcp", net.JoinHostPort(url.Host, port))
 			if err != nil {
 				return false, nil
 			}
@@ -148,7 +144,6 @@ func objectAddressableCondition(gvr schema.GroupVersionResource, obj *unstructur
 				return true, nil
 			}
 		}
-
 		return false, nil
 	}
 }

@@ -28,11 +28,26 @@ import (
 )
 
 // Address returns the address of an Addressable object as a URL.
+// Fails the test if not found.
 func Address(obj *unstructured.Unstructured) *url.URL {
+	return (*url.URL)(unstructuredToAddressableType(obj).Status.Address.URL)
+}
+
+// Address returns the address of an Addressable object as a URL
+// Retuns nil if not found.
+func AddressOrNil(obj *unstructured.Unstructured) *url.URL {
+	a := unstructuredToAddressableType(obj)
+	if a.Status.Address == nil {
+		return nil
+	}
+
+	return (*url.URL)(a.Status.Address.URL)
+}
+
+func unstructuredToAddressableType(obj *unstructured.Unstructured) *duckv1.AddressableType {
 	a := &duckv1.AddressableType{}
 	if err := duck.FromUnstructured(obj, a); err != nil {
 		framework.FailfWithOffset(2, "Failed to convert unstructured object to Addressable: %s", err)
 	}
-
-	return (*url.URL)(a.Status.Address.URL)
+	return a
 }
