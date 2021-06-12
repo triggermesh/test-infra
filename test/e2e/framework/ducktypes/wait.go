@@ -156,16 +156,25 @@ func objectStatusAddressCondition(gvr schema.GroupVersionResource, obj *unstruct
 
 		st, ok := u.Object["status"]
 		if !ok {
+			framework.Logf("no status yet")
 			return false, nil
 		}
 
-		status, ok := st.(map[string]string)
+		status, ok := st.(map[string]interface{})
 		if !ok {
+			framework.Logf("cannot convert status into map[string]interface{}")
 			return false, nil
 		}
 
-		ustr, ok := status["url"]
+		su, ok := status["url"]
 		if !ok {
+			framework.Logf("no status.url yet")
+			return false, nil
+		}
+
+		ustr, ok := su.(string)
+		if !ok {
+			framework.Logf("status.url is not a string")
 			return false, nil
 		}
 
