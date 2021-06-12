@@ -28,10 +28,9 @@ import (
 	_ "github.com/triggermesh/test-infra/test/e2e/framework"
 
 	// test suites
-	// _ "github.com/triggermesh/test-infra/test/e2e/bridges"
-	// _ "github.com/triggermesh/test-infra/test/e2e/sources"
-	// _ "github.com/triggermesh/test-infra/test/e2e/targets"
-	_ "github.com/triggermesh/test-infra/test/e2e/bridges/githubeventdisplay"
+	_ "github.com/triggermesh/test-infra/test/e2e/bridges"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources"
+	_ "github.com/triggermesh/test-infra/test/e2e/targets"
 )
 
 func TestE2e(t *testing.T) {
