@@ -72,14 +72,20 @@ func CreateEventDisplaySink(c clientset.Interface, namespace string) *duckv1.Des
 // managing the event-display application, assuming that Deployment is managed
 // by a Knative Service with the expected default name.
 func EventDisplayDeploymentName(c dynamic.Interface, namespace string) string {
+	return ksvcDeploymentName(c, EventDisplayKsvc(c, namespace))
+}
+
+// EventDisplayKsvc returns the Knative Service object
+// managing the event-display application, assuming that Deployment is managed
+// by a Knative Service with the expected default name.
+func EventDisplayKsvc(c dynamic.Interface, namespace string) *unstructured.Unstructured {
 	ksvcGVR := serving.ServicesResource.WithVersion("v1")
 
 	ksvc, err := c.Resource(ksvcGVR).Namespace(namespace).Get(context.Background(), eventDisplayName, metav1.GetOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Error getting event-display Knative Service: %s", err)
 	}
-
-	return ksvcDeploymentName(c, ksvc)
+	return ksvc
 }
 
 // ksvcDeployment returns the name of the Deployment matching the latest
