@@ -59,6 +59,10 @@ func CreateEventDisplaySink(c clientset.Interface, namespace string) *duckv1.Des
 
 	svcGVK := corev1.SchemeGroupVersion.WithKind("Service")
 
+	// even when the deployment is ready, event display might need some seconds
+	// to start receiving events.
+	time.Sleep(3 * time.Second)
+
 	return &duckv1.Destination{
 		Ref: &duckv1.KReference{
 			APIVersion: svcGVK.GroupVersion().String(),
