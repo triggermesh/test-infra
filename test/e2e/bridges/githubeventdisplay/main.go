@@ -89,7 +89,7 @@ var _ = Describe("GitHub to Event-Display", func() {
 		By("creating a Bridge object", func() {
 			brdgTmpl := manifest.ObjectFromFile("bridges/manifests/github-eventdisplay-bridge.yaml")
 
-			brdg, err := createBridge(brdgClient, brdgTmpl, ns, "test-",
+			brdg, err := bridges.CreateBridge(brdgClient, brdgTmpl, ns, "test-",
 				withRepo(ownerAndRepo(repo)),
 				withAPITokenSecret(apiTokenSecret.Name, apiTokenSecretKey),
 			)
@@ -169,24 +169,9 @@ func ownerAndRepo(r *github.Repository) string {
 	return *r.Owner.Login + "/" + *r.Name
 }
 
-// createBridge creates a Bridge object initialized with the given options.
-func createBridge(brdgCli dynamic.ResourceInterface, bridge *unstructured.Unstructured,
-	namespace, namePrefix string, opts ...bridgeOption) (*unstructured.Unstructured, error) {
-
-	bridge.SetNamespace(namespace)
-	bridge.SetGenerateName(namePrefix)
-
-	for _, opt := range opts {
-		opt(bridge)
-	}
-
-	return brdgCli.Create(context.Background(), bridge, metav1.CreateOptions{})
-}
-
-type bridgeOption func(*unstructured.Unstructured)
 
 // withRepo sets the ownerAndRepo spec field of the GitHubSource.
-func withRepo(ownerAndRepo string) bridgeOption {
+func withRepo(ownerAndRepo string) bridges.BridgeOption {
 	return func(brdg *unstructured.Unstructured) {
 		comps := bridges.Components(brdg)
 		ghSrc := comps[bridges.SeekComponentByKind(comps, "GitHubSource")]
@@ -202,7 +187,7 @@ func withRepo(ownerAndRepo string) bridgeOption {
 }
 
 // withAPITokenSecret sets the accessToken and secretToken spec fields of the GitHubSource.
-func withAPITokenSecret(secretName, apiTokenKey string) bridgeOption {
+func withAPITokenSecret(secretName, apiTokenKey string) bridges.BridgeOption {
 	return func(brdg *unstructured.Unstructured) {
 		comps := bridges.Components(brdg)
 		ghSrc := comps[bridges.SeekComponentByKind(comps, "GitHubSource")]

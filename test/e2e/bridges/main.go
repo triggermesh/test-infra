@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sources
+package bridges
 
 import (
 	_ "github.com/triggermesh/test-infra/test/e2e/bridges/githubeventdisplay"
 	_ "github.com/triggermesh/test-infra/test/e2e/bridges/githubsqs"
+	_ "github.com/triggermesh/test-infra/test/e2e/bridges/gitlabsqs"
 )

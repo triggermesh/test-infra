@@ -17,10 +17,31 @@ limitations under the License.
 package bridges
 
 import (
+	"context"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/dynamic"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
+
+type BridgeOption func(*unstructured.Unstructured)
+
+// CreateBridge creates a Bridge object initialized with the given options.
+func CreateBridge(brdgCli dynamic.ResourceInterface, bridge *unstructured.Unstructured,
+	namespace, namePrefix string, opts ...BridgeOption) (*unstructured.Unstructured, error) {
+
+	bridge.SetNamespace(namespace)
+	bridge.SetGenerateName(namePrefix)
+
+	for _, opt := range opts {
+		opt(bridge)
+	}
+
+	return brdgCli.Create(context.Background(), bridge, metav1.CreateOptions{})
+}
+
 
 // Components returns the Bridge's components as a list of
 // map[string]interface{}.
