@@ -4,8 +4,8 @@
 *~
 /*.sublime-project
 /*.sublime-workspace
-/.idea/
-/.vscode/
+.idea/
+.vscode/
 
 # OS artifacts
 .DS_Store
