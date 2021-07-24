@@ -71,7 +71,7 @@ var _ = Describe("Slack target", func() {
 	BeforeSuite(func() {
 		receivedEvent = make(chan slack.RTMEvent)
 		api := slack.New(
-			os.Getenv("SLACK_ACCESS_TOKEN"),
+			os.Getenv("SLACK_E2E_ACCESS_TOKEN"),
 			slack.OptionDebug(true),
 			slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)))
 
@@ -97,7 +97,7 @@ var _ = Describe("Slack target", func() {
 
 		By("creating a slack secret", func() {
 			kvMap := make(map[string]string)
-			kvMap["token"] = os.Getenv("SLACK_ACCESS_TOKEN")
+			kvMap["token"] = os.Getenv("SLACK_E2E_ACCESS_TOKEN")
 			slackSecret, err = createSecret(f.KubeClient, ns, "slack-secret", kvMap)
 			Expect(err).ToNot(HaveOccurred())
 		})
