@@ -18,4 +18,5 @@ package targets
 
 import (
 	_ "github.com/triggermesh/test-infra/test/e2e/targets/awseventbridge"
+	_ "github.com/triggermesh/test-infra/test/e2e/targets/slack"
 )
