@@ -67,24 +67,13 @@ var _ = Describe("Slack target", func() {
 	var rtm *slack.RTM
 	var receivedEvent chan slack.RTMEvent
 
-	// Setup the Slack websocket connection to listen to events
-	BeforeSuite(func() {
-		receivedEvent = make(chan slack.RTMEvent)
-		api := slack.New(
-			os.Getenv("SLACK_E2E_ACCESS_TOKEN"),
-			slack.OptionDebug(true),
-			slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)))
-
-		rtm = api.NewRTM()
-		go rtm.ManageConnection()
-		go captureEvents(rtm, receivedEvent)
-	})
-
 	// Kill the websocket connection when finished. This will run regardless of failure state
 	AfterSuite(func() {
 		// Shut down the Slack service
-		err = rtm.Disconnect()
-		Expect(err).ToNot(HaveOccurred())
+		if rtm != nil {
+			err = rtm.Disconnect()
+			Expect(err).ToNot(HaveOccurred())
+		}
 	})
 
 	BeforeEach(func() {
@@ -114,6 +103,17 @@ var _ = Describe("Slack target", func() {
 	})
 
 	When("an event is sent to the target", func() {
+		By("creating a slack webservice to monitor the results", func () {
+			receivedEvent = make(chan slack.RTMEvent)
+			api := slack.New(
+				os.Getenv("SLACK_E2E_ACCESS_TOKEN"),
+				slack.OptionDebug(true),
+				slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)))
+
+			rtm = api.NewRTM()
+			go rtm.ManageConnection()
+			go captureEvents(rtm, receivedEvent)
+		})
 
 		It("posts a message", func() {
 			sampleMsg := "this is a test message from: " + f.UniqueName
