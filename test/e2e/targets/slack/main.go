@@ -103,12 +103,12 @@ var _ = Describe("Slack target", func() {
 	})
 
 	When("an event is sent to the target", func() {
-		By("creating a slack webservice to monitor the results", func () {
+		By("creating a slack webservice to monitor the results", func() {
 			receivedEvent = make(chan slack.RTMEvent)
 			api := slack.New(
 				os.Getenv("SLACK_E2E_ACCESS_TOKEN"),
-				slack.OptionDebug(true),
-				slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)))
+				slack.OptionDebug(false),
+				slack.OptionLog(log.New(os.Stdout, "slack-target-test: ", log.Lshortfile|log.LstdFlags)))
 
 			rtm = api.NewRTM()
 			go rtm.ManageConnection()
