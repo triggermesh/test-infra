@@ -21,6 +21,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -139,14 +140,39 @@ var _ = Describe("Slack target", func() {
 			job := e2ece.RunEventSender(f.KubeClient, ns, tgtURL.String(), newEvent)
 			apps.WaitForCompletion(f.KubeClient, job)
 
-			slackEvent := <-receivedEvent
-			switch se := slackEvent.Data.(type) {
-			case *slack.MessageEvent:
-				Expect(se.Msg.Text).To(Equal(sampleMsg))
-			case *slack.RTMError:
-				framework.Failf("received an error from slack: " + se.Error())
-			case *slack.InvalidAuthEvent:
-				framework.Failf("received an auth error from slack")
+			// Set up the timeout thread. If it takes longer than 5s to get a reply, then something is wrong
+			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+			defer cancel()
+
+			go func() {
+				<-ctx.Done()
+				close(receivedEvent)
+			}()
+
+			processed := false
+			for slackEvent := range receivedEvent {
+				switch se := slackEvent.Data.(type) {
+				case *slack.MessageEvent:
+					if se.Msg.Channel == targetChannel {
+						Expect(se.Msg.Text).To(Equal(sampleMsg))
+						processed = true
+					}
+				case *slack.RTMError:
+					framework.Failf("received an error from slack: " + se.Error())
+					processed = true
+				case *slack.InvalidAuthEvent:
+					framework.Failf("received an auth error from slack")
+					processed = true
+				}
+
+				if processed {
+					return
+				}
+			}
+
+			if !processed {
+				framework.Failf("timeout reached")
 			}
 		})
 	})
@@ -159,7 +185,7 @@ func createSecret(c clientset.Interface, namespace, namePrefix, token string) (*
 			Namespace:    namespace,
 			GenerateName: namePrefix,
 		},
-		StringData: map[string]string {
+		StringData: map[string]string{
 			"token": token,
 		},
 	}
