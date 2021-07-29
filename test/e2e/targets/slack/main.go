@@ -124,7 +124,7 @@ var _ = Describe("Slack target", func() {
 			targetChannel := os.Getenv("SLACK_E2E_TEST_CHANNEL")
 
 			if targetChannel == "" {
-				targetChannel = "e2e-slack-test"
+				targetChannel = "C026HA6UCGM" // This must be the slack channel ID [in this case defaulting to e2e-slack-test]
 			}
 
 			msg := map[string]string{
