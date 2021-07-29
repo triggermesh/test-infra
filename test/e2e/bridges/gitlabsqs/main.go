@@ -20,24 +20,27 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/triggermesh/test-infra/test/e2e/framework"
-	e2esqs "github.com/triggermesh/test-infra/test/e2e/framework/aws/sqs"
-	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
-	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
-	"github.com/triggermesh/test-infra/test/e2e/framework/gitlab"
-	"github.com/triggermesh/test-infra/test/e2e/framework/manifest"
-	gogitlab "github.com/xanzy/go-gitlab"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	clientset "k8s.io/client-go/kubernetes"
+
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+
+	gogitlab "github.com/xanzy/go-gitlab"
+
+	"github.com/triggermesh/test-infra/test/e2e/framework"
+	e2esqs "github.com/triggermesh/test-infra/test/e2e/framework/aws/sqs"
+	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
+	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
+	"github.com/triggermesh/test-infra/test/e2e/framework/gitlab"
+	"github.com/triggermesh/test-infra/test/e2e/framework/manifest"
 )
 
 /* This test suite requires, in addition to AWS and KUBERNETES variables:
@@ -96,7 +99,7 @@ var _ = Describe("GitLab to SQS", func() {
 		})
 
 		By("creating a new GitLab project", func() {
-			gitlabProject, err = client.CreateProject(ns)
+			gitlabProject, err = client.CreateProject(f)
 			if err != nil {
 				e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
 				framework.FailfWithOffset(2, "Failed to create gitlab project: %s", err)
@@ -124,7 +127,7 @@ var _ = Describe("GitLab to SQS", func() {
 				bridgeTemplate,
 				ns,
 				"test-",
-				withProject(gitlab.DefaultBaseURL+"e2e-"+ns),
+				withProject(gitlab.DefaultBaseURL+ns),
 				withGitlabCredentials(gitlabSecret),
 				withAwsARN(e2esqs.QueueARN(sqsClient, sqsQueueURL)),
 				withAwsCredentials(awsSecret))
@@ -293,4 +296,3 @@ var bridgeAPIVersion = schema.GroupVersion{
 	Group:   "flow.triggermesh.io",
 	Version: "v1alpha1",
 }
-

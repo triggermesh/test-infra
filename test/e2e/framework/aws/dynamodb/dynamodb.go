@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func CreateTable(dc dynamodbiface.DynamoDBAPI, f *framework.Framework) string /*
 			StreamViewType: aws.String(dynamodb.StreamViewTypeNewAndOldImages),
 		},
 		BillingMode: aws.String(dynamodb.BillingModePayPerRequest),
-		TableName:   aws.String("e2e-" + f.UniqueName),
+		TableName:   &f.UniqueName,
 	}
 
 	if _, err := dc.CreateTable(input); err != nil {

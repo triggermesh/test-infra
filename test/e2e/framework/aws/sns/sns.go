@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ limitations under the License.
 package sns
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/aws/aws-sdk-go/service/sns/snsiface"
 
@@ -28,7 +27,7 @@ import (
 // CreateTopic creates a topic named after the given framework.Framework.
 func CreateTopic(snsClient snsiface.SNSAPI, f *framework.Framework) string /*arn*/ {
 	topic := &sns.CreateTopicInput{
-		Name: aws.String("e2e-" + f.UniqueName),
+		Name: &f.UniqueName,
 	}
 
 	resp, err := snsClient.CreateTopic(topic)
