@@ -24,11 +24,14 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/slack-go/slack"
+
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
 	e2ece "github.com/triggermesh/test-infra/test/e2e/framework/cloudevents"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,10 +41,13 @@ import (
 )
 
 /**
- * This test suite will require SLACK credentials to submit a post.
- * An alternate environment variable SLACK_E2E_TEST_CHANNEL is required to specify
- * the channel the test should monitor. Note the API key assigned to the bot _must_
- * be in the room to properly monitor.
+ * This test suite will require SLACK credentials passed as SLACK_E2E_ACCESS_TOKEN to submit a post.
+ * The access token must have at least `chat:write` scope to submit the test message, and the `bot` scope to use Slack's
+ * RTM library (see: https://api.slack.com/rtm)
+ *
+ * An alternate environment variable SLACK_E2E_TEST_CHANNEL is used to specify the target channel to publish messages and
+ * monitor. By default, this is #e2e-slack-test. For other channels, the API key assigned to the bot must be invited to
+ * the channel to monitor.
  */
 
 var targetAPIVersion = schema.GroupVersion{
@@ -59,7 +65,6 @@ var _ = Describe("Slack target", func() {
 
 	var ns string
 	var tgtClient dynamic.ResourceInterface
-	var tgt *unstructured.Unstructured
 	var tgtURL *url.URL
 
 	var err error
@@ -85,14 +90,12 @@ var _ = Describe("Slack target", func() {
 		var slackSecret *corev1.Secret
 
 		By("creating a slack secret", func() {
-			kvMap := make(map[string]string)
-			kvMap["token"] = os.Getenv("SLACK_E2E_ACCESS_TOKEN")
-			slackSecret, err = createSecret(f.KubeClient, ns, "slack-secret", kvMap)
+			slackSecret, err = createSecret(f.KubeClient, ns, "slack-secret", os.Getenv("SLACK_E2E_ACCESS_TOKEN"))
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		By("creating a SlackTarget object", func() {
-			tgt, err = createTarget(tgtClient, ns, "test-", withSecret(slackSecret))
+			tgt, err := createTarget(tgtClient, ns, "test-", withSecret(slackSecret.Name))
 			Expect(err).ToNot(HaveOccurred())
 
 			tgt = ducktypes.WaitUntilReady(f.DynamicClient, tgt)
@@ -123,9 +126,10 @@ var _ = Describe("Slack target", func() {
 				targetChannel = "e2e-slack-test"
 			}
 
-			msg := make(map[string]string)
-			msg["channel"] = targetChannel
-			msg["text"] = sampleMsg
+			msg := map[string]string{
+				"channel": targetChannel,
+				"text":    sampleMsg,
+			}
 
 			newEvent := e2ece.NewEvent(f)
 			newEvent.SetType("com.slack.webapi.chat.postMessage")
@@ -140,22 +144,24 @@ var _ = Describe("Slack target", func() {
 			case *slack.MessageEvent:
 				Expect(se.Msg.Text).To(Equal(sampleMsg))
 			case *slack.RTMError:
-				Fail("received an error from slack: " + se.Error())
+				framework.Failf("received an error from slack: " + se.Error())
 			case *slack.InvalidAuthEvent:
-				Fail("received an auth error from slack")
+				framework.Failf("received an auth error from slack")
 			}
 		})
 	})
 })
 
 // createSecret creates a slack secret to contain the API token
-func createSecret(c clientset.Interface, namespace, namePrefix string, kvmap map[string]string) (*corev1.Secret, error) {
+func createSecret(c clientset.Interface, namespace, namePrefix, token string) (*corev1.Secret, error) {
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    namespace,
 			GenerateName: namePrefix,
 		},
-		StringData: kvmap,
+		StringData: map[string]string {
+			"token": token,
+		},
 	}
 	return c.CoreV1().Secrets(namespace).Create(context.Background(), s, metav1.CreateOptions{})
 }
@@ -179,11 +185,11 @@ func createTarget(trgtClient dynamic.ResourceInterface, namespace, namePrefix st
 
 type targetOption func(*unstructured.Unstructured)
 
-func withSecret(slackKey *corev1.Secret) targetOption {
+func withSecret(secretName string) targetOption {
 	return func(src *unstructured.Unstructured) {
 		slackToken := map[string]interface{}{
 			"secretKeyRef": map[string]interface{}{
-				"name": slackKey.Name,
+				"name": secretName,
 				"key":  "token",
 			},
 		}
@@ -205,7 +211,7 @@ func captureEvents(rtm *slack.RTM, rv chan slack.RTMEvent) {
 		case *slack.InvalidAuthEvent:
 			rv <- msg
 		default:
-			// ignore other events (may want to log at some point
+			// ignore other events (may want to log at some point)
 		}
 	}
 }
