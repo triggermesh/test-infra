@@ -75,7 +75,15 @@ func WaitUntilReady(c dynamic.Interface, obj *unstructured.Unstructured) *unstru
 		return false, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	// NOTE(antoineco): Use a long timeout to make up for long propagation
+	// delays of imagePullSecrets to Kubernetes ServiceAccounts by
+	// "imagepullsecret-patcher" (triggermesh/test-infra#101).
+	//
+	// This value shouldn't exceed CircleCI's "no_output_timeout" to ensure
+	// the E2E process doesn't get killed due to inactivity.
+	const watchTimeout = 15 * time.Minute
+
+	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
 	defer cancel()
 
 	lastEvent, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isResourceReady)
