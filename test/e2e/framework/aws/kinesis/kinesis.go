@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 // CreateDatastream creates a stream named after the given framework.Framework.
 func CreateDatastream(kc kinesisiface.KinesisAPI, f *framework.Framework) string /*arn*/ {
 	stream := &kinesis.CreateStreamInput{
-		StreamName: aws.String("e2e-" + f.UniqueName),
+		StreamName: &f.UniqueName,
 		ShardCount: aws.Int64(1),
 	}
 

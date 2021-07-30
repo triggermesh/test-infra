@@ -70,4 +70,5 @@ spec:
         template:
           spec:
             containers:
-            - image: gcr.io/knative-releases/knative.dev/eventing-contrib/cmd/event_display@sha256:a4c088d4e48eaac7dc6de0dc3ef3fa4ed3e8f224baa4c2937f11061d380df430
+              # https://github.com/knative/eventing/releases/tag/v0.24.1
+            - image: gcr.io/knative-releases/knative.dev/eventing/cmd/event_display@sha256:eb27fc9f1dcfa92be5fa10fab34a812f62c2b164d53b3cf1581e6c0a5d2bad07

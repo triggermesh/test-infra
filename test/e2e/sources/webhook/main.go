@@ -94,7 +94,7 @@ var _ = Describe("Webhook source", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				src = ducktypes.WaitUntilAddressable(f.DynamicClient, src)
+				src = ducktypes.WaitUntilReady(f.DynamicClient, src)
 
 				srcURL = ducktypes.Address(src)
 				Expect(srcURL).ToNot(BeNil())

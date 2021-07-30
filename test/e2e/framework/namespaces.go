@@ -34,6 +34,8 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 )
 
+const namespacePrefix = "e2e-"
+
 // CreateNamespace creates a namespace and marks it for automatic cleanup at
 // the end of the test.
 func (f *Framework) CreateNamespace(baseName string, l ...labels.Set) (*corev1.Namespace, error) {
@@ -52,7 +54,7 @@ func createNamespace(c clientset.Interface, baseName string, labels labels.Set) 
 	// we can ensure the namespace is always deleted, even if the API call
 	// to create it failed.
 	var genName = func() string {
-		return baseName + "-" + RandomSuffix()
+		return namespacePrefix + baseName + "-" + RandomSuffix()
 	}
 	name := genName()
 

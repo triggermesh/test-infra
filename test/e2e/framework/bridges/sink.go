@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,8 +44,9 @@ import (
 )
 
 const (
-	eventDisplayName           = "event-display"
-	eventDisplayContainerImage = "gcr.io/knative-releases/knative.dev/eventing-contrib/cmd/event_display@sha256:a4c088d4e48eaac7dc6de0dc3ef3fa4ed3e8f224baa4c2937f11061d380df430"
+	eventDisplayName = "event-display"
+	// using a nightly image because versions prior to v0.25 (unreleased) don't expose "/healthz"
+	eventDisplayContainerImage = "gcr.io/knative-nightly/knative.dev/eventing/cmd/event_display@sha256:e1a70eabf59345a4b160f007cbfd121ef2aca6e0921fa81c79495c236a9f2d7b"
 )
 
 // CreateEventDisplaySink creates an event-display event sink and returns it as
@@ -55,13 +56,11 @@ func CreateEventDisplaySink(c clientset.Interface, namespace string) *duckv1.Des
 	const exposedPort uint16 = 80
 
 	_, svc := apps.CreateSimpleApplication(c, namespace,
-		eventDisplayName, eventDisplayContainerImage, internalPort, exposedPort)
+		eventDisplayName, eventDisplayContainerImage, internalPort, exposedPort,
+		apps.WithStartupProbe("/healthz"),
+	)
 
 	svcGVK := corev1.SchemeGroupVersion.WithKind("Service")
-
-	// even when the deployment is ready, event display might need some seconds
-	// to start receiving events.
-	time.Sleep(3 * time.Second)
 
 	return &duckv1.Destination{
 		Ref: &duckv1.KReference{
@@ -76,20 +75,14 @@ func CreateEventDisplaySink(c clientset.Interface, namespace string) *duckv1.Des
 // managing the event-display application, assuming that Deployment is managed
 // by a Knative Service with the expected default name.
 func EventDisplayDeploymentName(c dynamic.Interface, namespace string) string {
-	return ksvcDeploymentName(c, EventDisplayKsvc(c, namespace))
-}
-
-// EventDisplayKsvc returns the Knative Service object
-// managing the event-display application, assuming that Deployment is managed
-// by a Knative Service with the expected default name.
-func EventDisplayKsvc(c dynamic.Interface, namespace string) *unstructured.Unstructured {
 	ksvcGVR := serving.ServicesResource.WithVersion("v1")
 
 	ksvc, err := c.Resource(ksvcGVR).Namespace(namespace).Get(context.Background(), eventDisplayName, metav1.GetOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Error getting event-display Knative Service: %s", err)
 	}
-	return ksvc
+
+	return ksvcDeploymentName(c, ksvc)
 }
 
 // ksvcDeployment returns the name of the Deployment matching the latest

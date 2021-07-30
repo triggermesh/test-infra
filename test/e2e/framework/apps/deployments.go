@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ import (
 // container managed by the Deployment. `exposedPort` is the TCP port number
 // exposed by the Service.
 func CreateSimpleApplication(c clientset.Interface, namespace string,
-	name, image string, internalPort, exposedPort uint16) (*appsv1.Deployment, *corev1.Service) {
+	name, image string, internalPort, exposedPort uint16,
+	deplOpts ...DeploymentOption) (*appsv1.Deployment, *corev1.Service) {
 
 	svc := newSimpleService(namespace, name, exposedPort, internalPort)
 
@@ -55,6 +56,10 @@ func CreateSimpleApplication(c clientset.Interface, namespace string,
 
 	depl := newSimpleDeployment(namespace, name, image, internalPort)
 
+	for _, o := range deplOpts {
+		o(depl)
+	}
+
 	depl, err = c.AppsV1().Deployments(namespace).Create(context.Background(), depl, metav1.CreateOptions{})
 	if err != nil {
 		framework.FailfWithOffset(2, "Failed to create Deployment: %s", err)
@@ -63,6 +68,29 @@ func CreateSimpleApplication(c clientset.Interface, namespace string,
 	WaitUntilAvailable(c, depl)
 
 	return depl, svc
+}
+
+// DeploymentOption is a functional option for building a Deployment object.
+type DeploymentOption func(*appsv1.Deployment)
+
+// WithStartupProbe sets the HTTP startup probe of a Deployment's first
+// container, targetting this container's first TCP port.
+func WithStartupProbe(path string) DeploymentOption {
+	return func(d *appsv1.Deployment) {
+		sp := &d.Spec.Template.Spec.Containers[0].StartupProbe
+
+		port := int(d.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort)
+
+		*sp = &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: path,
+					Port: intstr.FromInt(port),
+				},
+			},
+			PeriodSeconds: 1,
+		}
+	}
 }
 
 // WaitUntilAvailable waits until the given Deployment becomes available.

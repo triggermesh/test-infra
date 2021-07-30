@@ -97,9 +97,6 @@ var _ = Describe("GitHub to Event-Display", func() {
 
 			ducktypes.WaitUntilReady(f.DynamicClient, brdg)
 
-			ed := bridges.EventDisplayKsvc(f.DynamicClient, ns)
-			ducktypes.WaitUntilStatusURL(f.DynamicClient, ed)
-
 			eventDisplayDeplName = bridges.EventDisplayDeploymentName(f.DynamicClient, ns)
 		})
 	})
@@ -168,7 +165,6 @@ var _ = Describe("GitHub to Event-Display", func() {
 func ownerAndRepo(r *github.Repository) string {
 	return *r.Owner.Login + "/" + *r.Name
 }
-
 
 // withRepo sets the ownerAndRepo spec field of the GitHubSource.
 func withRepo(ownerAndRepo string) bridges.BridgeOption {
