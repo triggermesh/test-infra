@@ -67,20 +67,18 @@ const awsSecretAccessKeySecretKey = "secret_access_key"
 var _ = Describe("GitHub to SQS", func() {
 	f := framework.New("github-sqs")
 
-	var ns string
-
 	var ghClient *github.Client
 	var repo *github.Repository
 
 	var sqsClient sqsiface.SQSAPI
-	var queueURL string
+	var sqsQueueURL string
 
 	BeforeEach(func() {
 		var brdgClient dynamic.ResourceInterface
 		var ghSecret *corev1.Secret
 		var awsSecret *corev1.Secret
 
-		ns = f.UniqueName
+		ns := f.UniqueName
 
 		gvr := bridgeAPIVersion.WithResource(bridgeResource)
 		brdgClient = f.DynamicClient.Resource(gvr).Namespace(ns)
@@ -95,7 +93,7 @@ var _ = Describe("GitHub to SQS", func() {
 		})
 
 		By("creating a SQS queue", func() {
-			queueURL = e2esqs.CreateQueue(sqsClient, f)
+			sqsQueueURL = e2esqs.CreateQueue(sqsClient, f)
 		})
 
 		By("creating a Kubernetes Secret containing the GitHub API token", func() {
@@ -112,7 +110,7 @@ var _ = Describe("GitHub to SQS", func() {
 			brdg, err := bridges.CreateBridge(brdgClient, brdgTmpl, ns, "test-",
 				withRepo(ownerAndRepo(repo)),
 				withAPITokenSecret(ghSecret.Name, ghApiTokenSecretKey),
-				withARN(e2esqs.QueueARN(sqsClient, queueURL)),
+				withARN(e2esqs.QueueARN(sqsClient, sqsQueueURL)),
 				withAWSCredsSecret(awsSecret.Name),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -126,8 +124,8 @@ var _ = Describe("GitHub to SQS", func() {
 			e2egithub.DeleteRepository(ghClient, *repo.Owner.Login, *repo.Name)
 		})
 
-		By("deleting SQS queue "+queueURL, func() {
-			e2esqs.DeleteQueue(sqsClient, queueURL)
+		By("deleting SQS queue "+sqsQueueURL, func() {
+			e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
 		})
 	})
 
@@ -142,7 +140,7 @@ var _ = Describe("GitHub to SQS", func() {
 		By("polling the SQS queue", func() {
 			var receivedMsgs []*sqs.Message
 
-			receivedMsgs = e2esqs.ReceiveMessages(sqsClient, queueURL)
+			receivedMsgs = e2esqs.ReceiveMessages(sqsClient, sqsQueueURL)
 
 			Expect(receivedMsgs).To(HaveLen(1),
 				"Received %d messages instead of 1", len(receivedMsgs))

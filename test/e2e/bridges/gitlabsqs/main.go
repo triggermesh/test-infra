@@ -27,151 +27,131 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	clientset "k8s.io/client-go/kubernetes"
 
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 
-	gogitlab "github.com/xanzy/go-gitlab"
+	gitlab "github.com/xanzy/go-gitlab"
 
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	e2esqs "github.com/triggermesh/test-infra/test/e2e/framework/aws/sqs"
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
-	"github.com/triggermesh/test-infra/test/e2e/framework/gitlab"
+	e2egitlab "github.com/triggermesh/test-infra/test/e2e/framework/gitlab"
 	"github.com/triggermesh/test-infra/test/e2e/framework/manifest"
 )
 
-/* This test suite requires, in addition to AWS and KUBERNETES variables:
- *   - GITLAB_API_TOKEN with the api scope set
- */
+/* This test suite requires:
+
+- A GitLab OAuth2 access token exported in the environment as GITLAB_API_TOKEN, with the "api" OAuth scope
+- AWS credentials in whichever form (https://docs.aws.amazon.com/sdk-for-go/api/aws/session/#hdr-Sessions_options_from_Shared_Config)
+- The name of an AWS region exported in the environment as AWS_REGION
+*/
+
+var bridgeAPIVersion = schema.GroupVersion{
+	Group:   "flow.triggermesh.io",
+	Version: "v1alpha1",
+}
+
+const bridgeResource = "bridges"
+
+const gitlabApiTokenSecretKey = "api_token"
+const gitlabWebhookSecretKey = "webhook_secret"
+
+const awsAccessKeyIDSecretKey = "access_key_id"
+const awsSecretAccessKeySecretKey = "secret_access_key"
 
 var _ = Describe("GitLab to SQS", func() {
 	f := framework.New("gitlab-sqs")
-	var ns string
 
-	var client *gitlab.GitlabHandle
-	var gitlabProject *gogitlab.Project
-
-	var err error
-
-	var gitlabSecret, awsSecret *corev1.Secret
+	var gitlabClient *gitlab.Client
+	var gitlabProject *gitlab.Project
 
 	var sqsClient sqsiface.SQSAPI
 	var sqsQueueURL string
 
 	BeforeEach(func() {
-		ns = f.UniqueName
-		token := gitlab.GetToken()
-		gvr := bridgeAPIVersion.WithResource("bridges")
-		bridgeClient := f.DynamicClient.Resource(gvr).Namespace(ns)
+		var brdgClient dynamic.ResourceInterface
+		var gitlabSecret *corev1.Secret
+		var awsSecret *corev1.Secret
 
-		awsSession := session.Must(session.NewSession())
+		ns := f.UniqueName
 
-		By("creating a new SQS client", func() {
-			sqsClient = sqs.New(awsSession)
+		gvr := bridgeAPIVersion.WithResource(bridgeResource)
+		brdgClient = f.DynamicClient.Resource(gvr).Namespace(ns)
+
+		gitlabClient = e2egitlab.NewClient()
+
+		sess := session.Must(session.NewSession())
+		sqsClient = sqs.New(sess)
+
+		By("creating a GitLab project", func() {
+			gitlabProject = e2egitlab.CreateProject(gitlabClient, f)
 		})
 
-		By("creating a Kubernetes secret for AWS", func() {
-			creds, err := awsSession.Config.Credentials.Get()
-			Expect(err).ToNot(HaveOccurred())
-
-			kvMap := make(map[string]string)
-			kvMap["access_key_id"] = creds.AccessKeyID
-			kvMap["secret_access_key"] = creds.SecretAccessKey
-
-			awsSecret, err = CreateSecret(f.KubeClient, ns, "aws-secret", kvMap)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		By("creating a SQS Queue", func() {
+		By("creating a SQS queue", func() {
 			sqsQueueURL = e2esqs.CreateQueue(sqsClient, f)
 		})
 
-		By("creating a new GitLab client", func() {
-			client, err = gitlab.NewClient(token)
-
-			if err != nil {
-				e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
-				framework.FailfWithOffset(2, "Failed to create gitlab client: %s", err)
-			}
+		By("creating a Kubernetes Secret containing the GitLab API token", func() {
+			gitlabSecret = createAPITokenSecret(f.KubeClient, ns, gitlabApiTokenSecretKey, e2egitlab.APIToken())
 		})
 
-		By("creating a new GitLab project", func() {
-			gitlabProject, err = client.CreateProject(f)
-			if err != nil {
-				e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
-				framework.FailfWithOffset(2, "Failed to create gitlab project: %s", err)
-			}
+		By("creating a Kubernetes Secret containing the AWS Access Credentials", func() {
+			awsSecret = createAWSCredsSecret(f.KubeClient, ns, readAWSCredentials(sess))
 		})
 
-		By("creating a Kubernetes secret for the GitLab API token", func() {
-			kvMap := make(map[string]string)
-			kvMap["accessToken"] = token
-			kvMap["secretToken"] = gitlab.DefaultSecretToken
+		By("creating a Bridge object", func() {
+			brdgTmpl := manifest.ObjectFromFile("bridges/manifests/gitlab-sqs-bridge.yaml")
 
-			gitlabSecret, err = CreateSecret(f.KubeClient, ns, "gl-secret", kvMap)
-			if err != nil {
-				// Cleanup generated project
-				_ = client.DeleteProject(gitlabProject)
-				e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
-				framework.FailfWithOffset(2, "Failed to create gitlab secret: %s", err)
-			}
-		})
+			brdg, err := bridges.CreateBridge(brdgClient, brdgTmpl, ns, "test-",
+				withProject(gitlabProject.WebURL),
+				withAPITokenSecret(gitlabSecret.Name, gitlabApiTokenSecretKey),
+				withARN(e2esqs.QueueARN(sqsClient, sqsQueueURL)),
+				withAWSCredsSecret(awsSecret.Name),
+			)
+			Expect(err).ToNot(HaveOccurred())
 
-		By("creating a gitlab->sqs bridge", func() {
-			bridgeTemplate := manifest.ObjectFromFile("bridges/manifests/gitlab-sqs-bridge.yaml")
-			bridge, err := bridges.CreateBridge(
-				bridgeClient,
-				bridgeTemplate,
-				ns,
-				"test-",
-				withProject(gitlab.DefaultBaseURL+ns),
-				withGitlabCredentials(gitlabSecret),
-				withAwsARN(e2esqs.QueueARN(sqsClient, sqsQueueURL)),
-				withAwsCredentials(awsSecret))
-
-			if err != nil {
-				// Cleanup generated project
-				_ = client.DeleteProject(gitlabProject)
-				e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
-				framework.FailfWithOffset(2, "Failed to create bridge: %s", err)
-			}
-
-			ducktypes.WaitUntilReady(f.DynamicClient, bridge)
+			ducktypes.WaitUntilReady(f.DynamicClient, brdg)
 		})
 	})
 
 	AfterEach(func() {
 		By("deleting GitLab project "+gitlabProject.Name, func() {
-			err = client.DeleteProject(gitlabProject)
-			Expect(err).ToNot(HaveOccurred())
+			e2egitlab.DeleteProject(gitlabClient, gitlabProject)
 		})
 
-		By("deleting AWS SQS Queue", func() {
+		By("deleting SQS queue "+sqsQueueURL, func() {
 			e2esqs.DeleteQueue(sqsClient, sqsQueueURL)
 		})
 	})
 
-	It("creates a new gitlab push event", func() {
-		var file *gogitlab.File
-		var payload []byte
+	It("receives events generated by the source", func() {
+		var file *gitlab.File
+		var receivedMsg []byte
 
-		By("creating a file", func() {
-			file = client.CreateCommit(gitlabProject)
+		By("creating a Git commit", func() {
+			file = e2egitlab.CreateCommit(gitlabClient, gitlabProject)
 		})
 
 		By("polling the SQS queue", func() {
-			receivedMessages := e2esqs.ReceiveMessages(sqsClient, sqsQueueURL)
+			var receivedMsgs []*sqs.Message
 
-			Expect(receivedMessages).To(HaveLen(1))
-			payload = []byte(*receivedMessages[0].Body)
+			receivedMsgs = e2esqs.ReceiveMessages(sqsClient, sqsQueueURL)
+
+			Expect(receivedMsgs).To(HaveLen(1),
+				"Received %d messages instead of 1", len(receivedMsgs))
+
+			receivedMsg = []byte(*receivedMsgs[0].Body)
 		})
 
-		By("inspecting the event", func() {
+		By("inspecting the message payload", func() {
 			msgData := make(map[string]interface{})
-			err := json.Unmarshal(payload, &msgData)
+			err := json.Unmarshal(receivedMsg, &msgData)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(msgData["type"]).To(Equal("dev.knative.sources.gitlab.push"))
@@ -179,7 +159,7 @@ var _ = Describe("GitLab to SQS", func() {
 			eventData, err := json.Marshal(msgData["data"])
 			Expect(err).ToNot(HaveOccurred())
 
-			gitlabEvent := &gogitlab.PushEvent{}
+			gitlabEvent := &gitlab.PushEvent{}
 			err = json.Unmarshal(eventData, gitlabEvent)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -190,6 +170,7 @@ var _ = Describe("GitLab to SQS", func() {
 	})
 })
 
+// withProject sets the projectUrl spec field of the GitLabSource.
 func withProject(projectUrl string) bridges.BridgeOption {
 	return func(bridge *unstructured.Unstructured) {
 		components := bridges.Components(bridge)
@@ -203,96 +184,144 @@ func withProject(projectUrl string) bridges.BridgeOption {
 	}
 }
 
-func withAwsARN(arn string) bridges.BridgeOption {
-	return func(bridge *unstructured.Unstructured) {
-		components := bridges.Components(bridge)
-		src := components[bridges.SeekComponentByKind(components, "AWSSQSTarget")]
+// withAPITokenSecret sets the accessToken and secretToken spec fields of the GitLabSource.
+func withAPITokenSecret(secretName, tokenKey string) bridges.BridgeOption {
+	return func(brdg *unstructured.Unstructured) {
+		comps := bridges.Components(brdg)
+		gitlabSrc := comps[bridges.SeekComponentByKind(comps, "GitLabSource")]
 
-		if err := unstructured.SetNestedField(src, arn, "object", "spec", "arn"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set object.spec.arn")
+		tokenSecretRef := map[string]interface{}{
+			"secretKeyRef": map[string]interface{}{
+				"name": secretName,
+				"key":  tokenKey,
+			},
 		}
 
-		bridges.SetComponents(bridge, components)
+		webhookSecretRef := map[string]interface{}{
+			"secretKeyRef": map[string]interface{}{
+				"name": secretName,
+				"key":  gitlabWebhookSecretKey,
+			},
+		}
+
+		if err := unstructured.SetNestedMap(gitlabSrc, tokenSecretRef, "object", "spec", "accessToken"); err != nil {
+			framework.FailfWithOffset(2, "Failed to set spec.accessToken field: %s", err)
+		}
+		if err := unstructured.SetNestedMap(gitlabSrc, webhookSecretRef, "object", "spec", "secretToken"); err != nil {
+			framework.FailfWithOffset(2, "Failed to set spec.secretToken field: %s", err)
+		}
+
+		// "comps" is a deep copy returned by unstructured.NestedSlice,
+		// so we need set the modified version on the Bridge object
+		bridges.SetComponents(brdg, comps)
 	}
 }
 
-func withGitlabCredentials(secret *corev1.Secret) bridges.BridgeOption {
-	return func(bridge *unstructured.Unstructured) {
-		components := bridges.Components(bridge)
-		src := components[bridges.SeekComponentByKind(components, "GitLabSource")]
+// withARN sets the arn spec field of the AWSSQSTarget.
+func withARN(arn string) bridges.BridgeOption {
+	return func(brdg *unstructured.Unstructured) {
+		comps := bridges.Components(brdg)
+		sqsTarget := comps[bridges.SeekComponentByKind(comps, "AWSSQSTarget")]
 
-		accessTokenRef := map[string]interface{}{
-			"secretKeyRef": map[string]interface{}{
-				"name": secret.Name,
-				"key":  "accessToken",
-			},
+		if err := unstructured.SetNestedField(sqsTarget, arn, "object", "spec", "arn"); err != nil {
+			framework.FailfWithOffset(2, "Failed to set spec.arn field: %s", err)
 		}
 
-		secretTokenRef := map[string]interface{}{
-			"secretKeyRef": map[string]interface{}{
-				"name": secret.Name,
-				"key":  "secretToken",
-			},
-		}
-
-		if err := unstructured.SetNestedMap(src, accessTokenRef, "object", "spec", "accessToken"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set object.spec.accessToken")
-		}
-
-		if err := unstructured.SetNestedMap(src, secretTokenRef, "object", "spec", "secretToken"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set object.spec.secretToken")
-		}
-
-		bridges.SetComponents(bridge, components)
+		// "comps" is a deep copy returned by unstructured.NestedSlice,
+		// so we need set the modified version on the Bridge object
+		bridges.SetComponents(brdg, comps)
 	}
 }
 
-func withAwsCredentials(secret *corev1.Secret) bridges.BridgeOption {
-	return func(bridge *unstructured.Unstructured) {
-		components := bridges.Components(bridge)
-		src := components[bridges.SeekComponentByKind(components, "AWSSQSTarget")]
+// withAWSCredsSecret sets the awsApiKey and awsApiSecret spec fields of the AWSSQSTarget.
+func withAWSCredsSecret(secretName string) bridges.BridgeOption {
+	return func(brdg *unstructured.Unstructured) {
+		comps := bridges.Components(brdg)
+		sqsTarget := comps[bridges.SeekComponentByKind(comps, "AWSSQSTarget")]
 
-		awsApiKey := map[string]interface{}{
+		apiKeySecretRef := map[string]interface{}{
 			"secretKeyRef": map[string]interface{}{
-				"name": secret.Name,
-				"key":  "access_key_id",
+				"name": secretName,
+				"key":  awsAccessKeyIDSecretKey,
 			},
 		}
 
-		awsApiSecret := map[string]interface{}{
+		apiSecretSecretRef := map[string]interface{}{
 			"secretKeyRef": map[string]interface{}{
-				"name": secret.Name,
-				"key":  "secret_access_key",
+				"name": secretName,
+				"key":  awsSecretAccessKeySecretKey,
 			},
 		}
 
-		if err := unstructured.SetNestedMap(src, awsApiKey, "object", "spec", "awsApiKey"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set object.spec.awsApiKey")
+		if err := unstructured.SetNestedMap(sqsTarget, apiKeySecretRef, "object", "spec", "awsApiKey"); err != nil {
+			framework.FailfWithOffset(2, "Failed to set spec.accessToken field: %s", err)
+		}
+		if err := unstructured.SetNestedMap(sqsTarget, apiSecretSecretRef, "object", "spec", "awsApiSecret"); err != nil {
+			framework.FailfWithOffset(2, "Failed to set spec.secretToken field: %s", err)
 		}
 
-		if err := unstructured.SetNestedMap(src, awsApiSecret, "object", "spec", "awsApiSecret"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set object.spec.awsApiSecret")
-		}
-
-		bridges.SetComponents(bridge, components)
+		// "comps" is a deep copy returned by unstructured.NestedSlice,
+		// so we need set the modified version on the Bridge object
+		bridges.SetComponents(brdg, comps)
 	}
+}
+
+// createAPITokenSecret creates a Kubernetes Secret containing a GitLab API
+// token and a hardcoded webhook token.
+func createAPITokenSecret(c clientset.Interface, namespace, tokenKey, tokenVal string) *corev1.Secret {
+	const webhookSecretVal = "test12345" // arbitrary value, to secure the webhook
+
+	secr := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:    namespace,
+			GenerateName: "gitlab-apitoken-",
+		},
+		StringData: map[string]string{
+			tokenKey:               tokenVal,
+			gitlabWebhookSecretKey: webhookSecretVal,
+		},
+	}
+
+	var err error
+
+	secr, err = c.CoreV1().Secrets(namespace).Create(context.Background(), secr, metav1.CreateOptions{})
+	if err != nil {
+		framework.FailfWithOffset(2, "Failed to create Secret: %s", err)
+	}
+
+	return secr
 }
 
 // TODO: These should be extracted out into a common location where they could be leveraged by all bridges
 
-// CreateSecret Generate the secret to use and post it to the kubernetes cluster
-func CreateSecret(c clientset.Interface, namespace, namePrefix string, kvmap map[string]string) (*corev1.Secret, error) {
-	s := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:    namespace,
-			GenerateName: namePrefix,
-		},
-		StringData: kvmap,
+func readAWSCredentials(sess *session.Session) credentials.Value {
+	creds, err := sess.Config.Credentials.Get()
+	if err != nil {
+		framework.FailfWithOffset(2, "Error reading AWS credentials: %s", err)
 	}
-	return c.CoreV1().Secrets(namespace).Create(context.Background(), s, metav1.CreateOptions{})
+
+	return creds
 }
 
-var bridgeAPIVersion = schema.GroupVersion{
-	Group:   "flow.triggermesh.io",
-	Version: "v1alpha1",
+// createAWSCredsSecret creates a Kubernetes Secret containing a AWS credentials.
+func createAWSCredsSecret(c clientset.Interface, namespace string, creds credentials.Value) *corev1.Secret {
+	secr := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:    namespace,
+			GenerateName: "aws-creds-",
+		},
+		StringData: map[string]string{
+			awsAccessKeyIDSecretKey:     creds.AccessKeyID,
+			awsSecretAccessKeySecretKey: creds.SecretAccessKey,
+		},
+	}
+
+	var err error
+
+	secr, err = c.CoreV1().Secrets(namespace).Create(context.Background(), secr, metav1.CreateOptions{})
+	if err != nil {
+		framework.FailfWithOffset(2, "Failed to create Secret: %s", err)
+	}
+
+	return secr
 }
