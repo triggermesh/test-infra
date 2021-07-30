@@ -68,8 +68,6 @@ var _ = Describe("Slack target", func() {
 	var tgtClient dynamic.ResourceInterface
 	var tgtURL *url.URL
 
-	var err error
-
 	var rtm *slack.RTM
 	var receivedEvent chan slack.RTMEvent
 
@@ -77,7 +75,7 @@ var _ = Describe("Slack target", func() {
 	AfterSuite(func() {
 		// Shut down the Slack service
 		if rtm != nil {
-			err = rtm.Disconnect()
+			err := rtm.Disconnect()
 			Expect(err).ToNot(HaveOccurred())
 		}
 	})
@@ -91,8 +89,7 @@ var _ = Describe("Slack target", func() {
 		var slackSecret *corev1.Secret
 
 		By("creating a slack secret", func() {
-			slackSecret, err = createSecret(f.KubeClient, ns, "slack-secret", os.Getenv("SLACK_E2E_ACCESS_TOKEN"))
-			Expect(err).ToNot(HaveOccurred())
+			slackSecret = createSecret(f.KubeClient, ns, "slack-secret", os.Getenv("SLACK_E2E_ACCESS_TOKEN"))
 		})
 
 		By("creating a SlackTarget object", func() {
@@ -179,7 +176,7 @@ var _ = Describe("Slack target", func() {
 })
 
 // createSecret creates a slack secret to contain the API token
-func createSecret(c clientset.Interface, namespace, namePrefix, token string) (*corev1.Secret, error) {
+func createSecret(c clientset.Interface, namespace, namePrefix, token string) *corev1.Secret {
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    namespace,
@@ -189,7 +186,11 @@ func createSecret(c clientset.Interface, namespace, namePrefix, token string) (*
 			"token": token,
 		},
 	}
-	return c.CoreV1().Secrets(namespace).Create(context.Background(), s, metav1.CreateOptions{})
+
+	rv, err := c.CoreV1().Secrets(namespace).Create(context.Background(), s, metav1.CreateOptions{})
+	Expect(err).ToNot(HaveOccurred())
+
+	return rv
 }
 
 // createTarget creates a SlackTarget object initialized with the given options.
