@@ -19,6 +19,7 @@ package gitlabsqs
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -139,6 +140,11 @@ var _ = Describe("GitLab to SQS", func() {
 		})
 
 		By("polling the SQS queue", func() {
+			// FIXME(antoineco): The timing of the initial delivery
+			// is known to be rather unpredictable with this event
+			// source. Allow some initial time before polling.
+			time.Sleep(5 * time.Second)
+
 			var receivedMsgs []*sqs.Message
 
 			receivedMsgs = e2esqs.ReceiveMessages(sqsClient, sqsQueueURL)
@@ -151,17 +157,14 @@ var _ = Describe("GitLab to SQS", func() {
 
 		By("inspecting the message payload", func() {
 			msgData := make(map[string]interface{})
-			err := json.Unmarshal(receivedMsg, &msgData)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(json.Unmarshal(receivedMsg, &msgData)).ToNot(HaveOccurred())
 
 			Expect(msgData["type"]).To(Equal("dev.knative.sources.gitlab.push"))
 
 			eventData, err := json.Marshal(msgData["data"])
 			Expect(err).ToNot(HaveOccurred())
-
 			gitlabEvent := &gitlab.PushEvent{}
-			err = json.Unmarshal(eventData, gitlabEvent)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(json.Unmarshal(eventData, gitlabEvent)).ToNot(HaveOccurred())
 
 			Expect(gitlabEvent.ProjectID).To(Equal(gitlabProject.ID))
 			Expect(gitlabEvent.TotalCommitsCount).To(Equal(1))

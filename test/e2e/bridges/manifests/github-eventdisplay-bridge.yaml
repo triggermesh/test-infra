@@ -56,6 +56,9 @@ spec:
         name: &targetname event-display
       spec:
         broker: *brokername
+        filter:
+          attributes:
+            type: dev.knative.source.github.push
         subscriber:
           ref:
             apiVersion: serving.knative.dev/v1
