@@ -152,8 +152,9 @@ var _ = Describe("AWS DynamoDB source", func() {
 				Expect(e.DataAs(&r)).NotTo(HaveOccurred())
 				Expect(dynamodbattribute.UnmarshalMap(r.Dynamodb.NewImage, &i)).NotTo(HaveOccurred())
 
-				Expect(e.Type()).To(Equal("com.amazon.dynamodb.insert"))
+				Expect(e.Type()).To(Equal("com.amazon.dynamodb.stream_record"))
 				Expect(e.Source()).To(Equal(tableARN))
+				Expect(e.Extensions()["dynamodboperation"]).To(Equal("INSERT"))
 				Expect(i.MyValue).To(Equal(itemValue))
 			})
 		})
