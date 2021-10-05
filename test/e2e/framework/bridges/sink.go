@@ -185,6 +185,8 @@ func splitEvents(logStream io.Reader) []string {
 //   id: edecf007-f651-4e10-959e-e2f0a5b8ccd0
 //   time: 2020-09-14T13:59:40.693213706Z
 //   datacontenttype: application/json
+// Extensions,
+//   someextension: some-value
 // Data,
 //   {
 //     ...
@@ -228,17 +230,25 @@ func parseCloudEvent(ce string) cloudevents.Event {
 
 		case 2:
 			switch k, v := subs[0], strings.TrimSpace(subs[1]); k {
+
+			// Required attributes
+			case "id":
+				e.SetID(v)
+			case "source":
+				e.SetSource(v)
+			case "specversion":
+				e.SetSpecVersion(v)
+			case "type":
+				e.SetType(v)
+
+			// Optional attributes
 			case "datacontenttype":
 				contentType = v
 				e.SetDataContentType(v)
-			case "type":
-				e.SetType(v)
-			case "source":
-				e.SetSource(v)
+			case "dataschema":
+				e.SetDataSchema(v)
 			case "subject":
 				e.SetSubject(v)
-			case "id":
-				e.SetID(v)
 			case "time":
 				t, err := time.Parse(time.RFC3339Nano, v)
 				if err != nil {
@@ -246,6 +256,10 @@ func parseCloudEvent(ce string) cloudevents.Event {
 					break
 				}
 				e.SetTime(t)
+
+			// Extensions
+			default:
+				e.SetExtension(k, v)
 			}
 		}
 
