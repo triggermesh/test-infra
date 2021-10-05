@@ -24,8 +24,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/google/uuid"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -129,10 +127,10 @@ var _ = Describe("AWS DynamoDB source", func() {
 		})
 
 		When("a message is sent to the table", func() {
-			seed := uuid.New().String()
+			const itemValue = "test-value"
 
 			BeforeEach(func() {
-				e2edynamodb.PutItem(dc, tableName, seed)
+				e2edynamodb.PutItem(dc, tableName, itemValue)
 			})
 
 			Specify("the source generates an event", func() {
@@ -149,14 +147,14 @@ var _ = Describe("AWS DynamoDB source", func() {
 				e := receivedEvents[0]
 
 				var r dynamodbstreams.Record
-				var i e2edynamodb.Item
+				var i e2edynamodb.TestItem
 
 				Expect(e.DataAs(&r)).NotTo(HaveOccurred())
 				Expect(dynamodbattribute.UnmarshalMap(r.Dynamodb.NewImage, &i)).NotTo(HaveOccurred())
 
 				Expect(e.Type()).To(Equal("com.amazon.dynamodb.insert"))
 				Expect(e.Source()).To(Equal(tableARN))
-				Expect(i.Seed).To(Equal(seed))
+				Expect(i.MyValue).To(Equal(itemValue))
 			})
 		})
 	})

@@ -29,22 +29,24 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-type Item struct {
-	Seed string
+type TestItem struct {
+	MyValue string
 }
+
+const attrName = "MyValue"
 
 // CreateTable creates a table named after the given framework.Framework.
 func CreateTable(dc dynamodbiface.DynamoDBAPI, f *framework.Framework) string /*arn*/ {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
-				AttributeName: aws.String("Seed"),
+				AttributeName: aws.String(attrName),
 				AttributeType: aws.String(dynamodb.ScalarAttributeTypeS),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
-				AttributeName: aws.String("Seed"),
+				AttributeName: aws.String(attrName),
 				KeyType:       aws.String(dynamodb.KeyTypeHash),
 			},
 		},
@@ -70,20 +72,20 @@ func CreateTable(dc dynamodbiface.DynamoDBAPI, f *framework.Framework) string /*
 	return *output.Table.TableArn
 }
 
-// PutItem creates a item with the seed value and inserts it to the table.
-func PutItem(dc dynamodbiface.DynamoDBAPI, name string, seed string) {
-	item := Item{
-		Seed: seed,
+// PutItem inserts a new Item into the table of the given name.
+func PutItem(dc dynamodbiface.DynamoDBAPI, tableName, value string) {
+	item := TestItem{
+		MyValue: value,
 	}
 
 	av, err := dynamodbattribute.MarshalMap(item)
 	if err != nil {
-		framework.FailfWithOffset(2, "Got error marshalling new track item: %s", err)
+		framework.FailfWithOffset(2, "Failed to marshal item to map: %s", err)
 	}
 
 	input := &dynamodb.PutItemInput{
 		Item:      av,
-		TableName: aws.String(name),
+		TableName: &tableName,
 	}
 
 	if _, err = dc.PutItem(input); err != nil {
@@ -94,7 +96,7 @@ func PutItem(dc dynamodbiface.DynamoDBAPI, name string, seed string) {
 // DeleteTable deletes a table by name.
 func DeleteTable(dc dynamodbiface.DynamoDBAPI, name string) {
 	input := &dynamodb.DeleteTableInput{
-		TableName: aws.String(name),
+		TableName: &name,
 	}
 
 	if _, err := dc.DeleteTable(input); err != nil {
