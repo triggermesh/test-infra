@@ -14,15 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sources
+// Package gcloud contains helpers to interact with Google Cloud services.
+package gcloud
 
 import (
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/awscodecommit"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/awscognitouserpool"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/awsdynamodb"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/awskinesis"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssns"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssqs"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudpubsub"
-	_ "github.com/triggermesh/test-infra/test/e2e/sources/webhook"
+	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
+
+const pubsubLabelOwnerResource = "io-triggermesh_owner-resource"
+
+// TopicID returns a topicID matching the given framework.Framework.
+func TopicID(f *framework.Framework) string {
+	return f.UniqueName
+}
+
+// TagsFor returns a set of resource tags matching the given framework.Framework.
+func TagsFor(f *framework.Framework) map[string]string {
+	return map[string]string{
+		pubsubLabelOwnerResource: f.UniqueName,
+	}
+}

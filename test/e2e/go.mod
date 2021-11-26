@@ -3,6 +3,7 @@ module github.com/triggermesh/test-infra/test/e2e
 go 1.15
 
 require (
+	cloud.google.com/go/pubsub v1.6.1 // indirect
 	github.com/aws/aws-sdk-go v1.34.22
 	github.com/cloudevents/sdk-go/v2 v2.2.0
 	github.com/google/go-github/v32 v32.1.0
@@ -14,6 +15,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20210629170331-7dc0b73dc9fb // indirect
 	golang.org/x/tools v0.1.4 // indirect
+	google.golang.org/api v0.29.0 // indirect
 	k8s.io/api v0.18.8
 	k8s.io/apimachinery v0.18.8
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
