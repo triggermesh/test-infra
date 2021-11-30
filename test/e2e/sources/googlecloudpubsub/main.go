@@ -80,7 +80,7 @@ var _ = Describe("Google Cloud PubSub source", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 	})
 
-	Context("a source watches an non existing subscription", func() {
+	Context("a source watches an non-existing subscription", func() {
 		var pubsubClient *pubsub.Client
 		var err error
 
