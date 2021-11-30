@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020 TriggerMesh Inc.
+Copyright (c) 2021 TriggerMesh Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -67,6 +67,7 @@ var _ = Describe("Google Cloud PubSub source", func() {
 	var srcClient dynamic.ResourceInterface
 
 	var topic *pubsub.Topic
+	var subscription string
 	var project string
 	var saKey string
 
@@ -100,6 +101,72 @@ var _ = Describe("Google Cloud PubSub source", func() {
 			By("creating a GoogleCloudPubSub object", func() {
 				src, err := createSource(srcClient, ns, "test-", sink,
 					withTopic(topic.String()),
+					withCredentials(saKey),
+				)
+				Expect(err).ToNot(HaveOccurred())
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+			})
+		})
+
+		AfterEach(func() {
+			By("deleting pubsub topic "+topic.String(), func() {
+				e2epubsub.DeleteTopic(pubsubClient, topic)
+			})
+		})
+
+		When("a message is sent to the topic", func() {
+			var msgId string
+
+			BeforeEach(func() {
+				msgId = e2epubsub.SendMessage(pubsubClient, topic, f)
+			})
+
+			Specify("the source generates an event", func() {
+				const receiveTimeout = 15 * time.Second
+				const pollInterval = 500 * time.Millisecond
+
+				var receivedEvents []cloudevents.Event
+
+				readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
+
+				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+				Expect(receivedEvents).To(HaveLen(1))
+
+				e := receivedEvents[0]
+
+				Expect(e.Type()).To(Equal("com.google.cloud.pubsub.message"))
+				Expect(e.ID()).To(Equal(msgId))
+				Expect(e.Source()).To(Equal(topic.String()))
+			})
+		})
+	})
+
+	Context("a source watches an existing subscription", func() {
+		var pubsubClient *pubsub.Client
+		var err error
+
+		BeforeEach(func() {
+			saKey = e2epubsub.GetCreds()
+			project = e2epubsub.GetProject()
+			pubsubClient, err = pubsub.NewClient(context.Background(), project, option.WithCredentialsJSON([]byte(saKey)))
+			Expect(err).ToNot(HaveOccurred())
+
+			By("creating an event sink", func() {
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
+			})
+
+			By("creating a pubsub topic", func() {
+				topic = e2epubsub.CreateTopic(pubsubClient, f)
+			})
+
+			By("creating a pubsub subscription", func() {
+				subscription = e2epubsub.CreateSubscription(pubsubClient, topic, f)
+			})
+
+			By("creating a GoogleCloudPubSub object", func() {
+				src, err := createSource(srcClient, ns, "test-", sink,
+					withTopic(topic.String()),
+					withSubscription(subscription),
 					withCredentials(saKey),
 				)
 				Expect(err).ToNot(HaveOccurred())
@@ -204,6 +271,14 @@ func withTopic(topic string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, topic, "spec", "topic"); err != nil {
 			framework.FailfWithOffset(3, "Failed to set spec.topic field: %s", err)
+		}
+	}
+}
+
+func withSubscription(subscription string) sourceOption {
+	return func(src *unstructured.Unstructured) {
+		if err := unstructured.SetNestedField(src.Object, subscription, "spec", "subscription"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.subscription field: %s", err)
 		}
 	}
 }

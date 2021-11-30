@@ -47,7 +47,7 @@ func CreateTopic(pubsubCli *pubsub.Client, f *framework.Framework) *pubsub.Topic
 		Labels: gcloud.TagsFor(f),
 	}
 
-	topicID := gcloud.TopicID(f)
+	topicID := gcloud.PubSubResourceID(f)
 
 	resp, err := pubsubCli.CreateTopicWithConfig(context.Background(), topicID, cfg)
 	if err != nil {
@@ -55,6 +55,23 @@ func CreateTopic(pubsubCli *pubsub.Client, f *framework.Framework) *pubsub.Topic
 	}
 
 	return resp
+}
+
+// CreateSubscription creates a subscription for a topic.
+func CreateSubscription(pubsubCli *pubsub.Client, topic *pubsub.Topic, f *framework.Framework) string {
+	cfg := pubsub.SubscriptionConfig{
+		Topic:  topic,
+		Labels: gcloud.TagsFor(f),
+	}
+
+	subscriptionID := gcloud.PubSubResourceID(f)
+
+	resp, err := pubsubCli.CreateSubscription(context.Background(), subscriptionID, cfg)
+	if err != nil {
+		framework.FailfWithOffset(2, "Failed to create subscription for topic %q: %s", topic.String(), err)
+	}
+
+	return resp.String()
 }
 
 func SendMessage(pubsubCli *pubsub.Client, topic *pubsub.Topic, f *framework.Framework) string {

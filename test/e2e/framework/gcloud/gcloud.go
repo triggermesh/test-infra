@@ -23,8 +23,8 @@ import (
 
 const pubsubLabelOwnerResource = "io-triggermesh_owner-resource"
 
-// TopicID returns a topicID matching the given framework.Framework.
-func TopicID(f *framework.Framework) string {
+// PubSubResourceID returns a deterministic Pub/Sub resource ID matching the given framework.Framework.
+func PubSubResourceID(f *framework.Framework) string {
 	return f.UniqueName
 }
 
