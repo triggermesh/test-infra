@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	cloud.google.com/go/pubsub v1.6.1
+	cloud.google.com/go/storage v1.10.0
 	github.com/aws/aws-sdk-go v1.34.22
 	github.com/cloudevents/sdk-go/v2 v2.2.0
 	github.com/google/go-github/v32 v32.1.0

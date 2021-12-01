@@ -19,27 +19,11 @@ package pubsub
 
 import (
 	"context"
-	"os"
 
 	"cloud.google.com/go/pubsub"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	"github.com/triggermesh/test-infra/test/e2e/framework/gcloud"
 )
-
-const (
-	credsEnvVar   = "GOOGLECLOUD_PUBSUB_KEY"
-	projectEnvVar = "GOOGLECLOUD_PROJECT"
-)
-
-// GetCreds returns the Google Cloud PubSub creds read from the environment.
-func GetCreds() string {
-	return os.Getenv(credsEnvVar)
-}
-
-// GetProject returns the Google Cloud PubSub project read from the environment.
-func GetProject() string {
-	return os.Getenv(projectEnvVar)
-}
 
 // CreateTopic creates a topic named after the given framework.Framework.
 func CreateTopic(pubsubCli *pubsub.Client, f *framework.Framework) *pubsub.Topic {

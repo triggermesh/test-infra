@@ -18,6 +18,8 @@ limitations under the License.
 package gcloud
 
 import (
+	"os"
+
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
@@ -33,4 +35,14 @@ func TagsFor(f *framework.Framework) map[string]string {
 	return map[string]string{
 		pubsubLabelOwnerResource: f.UniqueName,
 	}
+}
+
+// GetCreds returns the Google Cloud creds read from the environment.
+func GetCreds(credsEnvVar string) string {
+	return os.Getenv(credsEnvVar)
+}
+
+// GetProject returns the Google Cloud project read from the environment.
+func GetProject(projectEnvVar string) string {
+	return os.Getenv(projectEnvVar)
 }
