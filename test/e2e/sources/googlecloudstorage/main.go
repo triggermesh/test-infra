@@ -32,7 +32,6 @@ import (
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 
-	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -42,7 +41,6 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
 	e2egcloud "github.com/triggermesh/test-infra/test/e2e/framework/gcloud"
-	e2epubsub "github.com/triggermesh/test-infra/test/e2e/framework/gcloud/pubsub"
 	e2estorage "github.com/triggermesh/test-infra/test/e2e/framework/gcloud/storage"
 )
 
@@ -73,7 +71,6 @@ var _ = Describe("Google Cloud Storage source", func() {
 
 	var srcClient dynamic.ResourceInterface
 
-	var topic *pubsub.Topic
 	var bucket string
 	var object string
 	var project string
@@ -89,25 +86,17 @@ var _ = Describe("Google Cloud Storage source", func() {
 	})
 
 	Context("a source watches a bucket", func() {
-		var pubsubClient *pubsub.Client
 		var storageClient *storage.Client
 		var err error
 
 		BeforeEach(func() {
 			saKey = e2egcloud.GetCreds(credsEnvVar)
 			project = e2egcloud.GetProject(projectEnvVar)
-			pubsubClient, err = pubsub.NewClient(context.Background(), project, option.WithCredentialsJSON([]byte(saKey)))
-			Expect(err).ToNot(HaveOccurred())
-
 			storageClient, err = storage.NewClient(context.Background(), option.WithCredentialsJSON([]byte(saKey)))
 			Expect(err).ToNot(HaveOccurred())
 
 			By("creating an event sink", func() {
 				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-			})
-
-			By("creating a pubsub topic", func() {
-				topic = e2epubsub.CreateTopic(pubsubClient, f)
 			})
 
 			By("creating a bucket", func() {
@@ -127,9 +116,6 @@ var _ = Describe("Google Cloud Storage source", func() {
 		})
 
 		AfterEach(func() {
-			By("deleting pubsub topic "+topic.String(), func() {
-				e2epubsub.DeleteTopic(pubsubClient, topic)
-			})
 			By("deleting storage object "+object, func() {
 				e2estorage.DeleteObject(storageClient, bucket, object)
 			})
