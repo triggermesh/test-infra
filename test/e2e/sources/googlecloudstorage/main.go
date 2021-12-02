@@ -87,6 +87,7 @@ var _ = Describe("Google Cloud Storage source", func() {
 
 	Context("a source watches a bucket", func() {
 		var storageClient *storage.Client
+		var src *unstructured.Unstructured
 		var err error
 
 		BeforeEach(func() {
@@ -104,7 +105,7 @@ var _ = Describe("Google Cloud Storage source", func() {
 			})
 
 			By("creating a GoogleCloudStorage object", func() {
-				src, err := createSource(srcClient, ns, "test-", sink,
+				src, err = createSource(srcClient, ns, "test-", sink,
 					withBucket(bucket),
 					withProject(project),
 					withEventTypes("OBJECT_FINALIZE"),
@@ -121,6 +122,9 @@ var _ = Describe("Google Cloud Storage source", func() {
 			})
 			By("deleting storage bucket "+bucket, func() {
 				e2estorage.DeleteBucket(storageClient, bucket)
+			})
+			By("deleting a GoogleCloudStorage object", func() {
+				srcClient.Delete(context.Background(), src.GetName(), metav1.DeleteOptions{})
 			})
 		})
 
