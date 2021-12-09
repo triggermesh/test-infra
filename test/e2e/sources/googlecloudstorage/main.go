@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package googlecloudpubsub
+package googlecloudstorage
 
 import (
 	"context"
@@ -32,7 +32,7 @@ import (
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/storage"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
@@ -41,12 +41,12 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
 	e2egcloud "github.com/triggermesh/test-infra/test/e2e/framework/gcloud"
-	e2epubsub "github.com/triggermesh/test-infra/test/e2e/framework/gcloud/pubsub"
+	e2estorage "github.com/triggermesh/test-infra/test/e2e/framework/gcloud/storage"
 )
 
 /* This test suite requires:
 
-   - Google Cloud Credentials in json exported in the environment as GOOGLECLOUD_PUBSUB_KEY
+   - Google Cloud Credentials in json exported in the environment as GOOGLECLOUD_STORAGE_KEY
    - The name of the Google Cloud project exported in the environment as GOOGLECLOUD_PROJECT
 */
 
@@ -56,22 +56,23 @@ var sourceAPIVersion = schema.GroupVersion{
 }
 
 const (
-	sourceKind     = "GoogleCloudPubSubSource"
-	sourceResource = "googlecloudpubsubsources"
+	sourceKind     = "GoogleCloudStorageSource"
+	sourceResource = "googlecloudstoragesources"
 
-	credsEnvVar   = "GOOGLECLOUD_PUBSUB_KEY"
+	credsEnvVar   = "GOOGLECLOUD_STORAGE_KEY"
 	projectEnvVar = "GOOGLECLOUD_PROJECT"
 )
 
-var _ = Describe("Google Cloud PubSub source", func() {
-	f := framework.New("googlecloudpubsubsource")
+var _ = Describe("Google Cloud Storage source", func() {
+	// Storage buckets aren't allowed to contain "google"
+	f := framework.New("cloudstoragesource")
 
 	var ns string
 
 	var srcClient dynamic.ResourceInterface
 
-	var topic *pubsub.Topic
-	var subscription string
+	var bucket string
+	var object string
 	var project string
 	var saKey string
 
@@ -84,27 +85,30 @@ var _ = Describe("Google Cloud PubSub source", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 	})
 
-	Context("a source watches an non-existing subscription", func() {
-		var pubsubClient *pubsub.Client
+	Context("a source watches a bucket", func() {
+		var storageClient *storage.Client
+		var src *unstructured.Unstructured
 		var err error
 
 		BeforeEach(func() {
 			saKey = e2egcloud.GetCreds(credsEnvVar)
 			project = e2egcloud.GetProject(projectEnvVar)
-			pubsubClient, err = pubsub.NewClient(context.Background(), project, option.WithCredentialsJSON([]byte(saKey)))
+			storageClient, err = storage.NewClient(context.Background(), option.WithCredentialsJSON([]byte(saKey)))
 			Expect(err).ToNot(HaveOccurred())
 
 			By("creating an event sink", func() {
 				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 			})
 
-			By("creating a pubsub topic", func() {
-				topic = e2epubsub.CreateTopic(pubsubClient, f)
+			By("creating a bucket", func() {
+				bucket = e2estorage.CreateBucket(storageClient, project, f)
 			})
 
-			By("creating a GoogleCloudPubSub object", func() {
-				src, err := createSource(srcClient, ns, "test-", sink,
-					withTopic(topic.String()),
+			By("creating a GoogleCloudStorage object", func() {
+				src, err = createSource(srcClient, ns, "test-", sink,
+					withBucket(bucket),
+					withProject(project),
+					withEventTypes("OBJECT_FINALIZE"),
 					withCredentials(saKey),
 				)
 				Expect(err).ToNot(HaveOccurred())
@@ -113,16 +117,20 @@ var _ = Describe("Google Cloud PubSub source", func() {
 		})
 
 		AfterEach(func() {
-			By("deleting pubsub topic "+topic.String(), func() {
-				e2epubsub.DeleteTopic(pubsubClient, topic)
+			By("deleting storage object "+object, func() {
+				e2estorage.DeleteObject(storageClient, bucket, object)
+			})
+			By("deleting storage bucket "+bucket, func() {
+				e2estorage.DeleteBucket(storageClient, bucket)
+			})
+			By("deleting a GoogleCloudStorage object", func() {
+				srcClient.Delete(context.Background(), src.GetName(), metav1.DeleteOptions{})
 			})
 		})
 
-		When("a message is sent to the topic", func() {
-			var msgId string
-
+		When("a new object is created", func() {
 			BeforeEach(func() {
-				msgId = e2epubsub.SendMessage(pubsubClient, topic, f)
+				object = e2estorage.CreateObject(storageClient, project, bucket, f)
 			})
 
 			Specify("the source generates an event", func() {
@@ -138,80 +146,13 @@ var _ = Describe("Google Cloud PubSub source", func() {
 
 				e := receivedEvents[0]
 
-				Expect(e.Type()).To(Equal("com.google.cloud.pubsub.message"))
-				Expect(e.ID()).To(Equal(msgId))
-				Expect(e.Source()).To(Equal(topic.String()))
+				Expect(e.Type()).To(Equal("com.google.cloud.storage.notification"))
+				Expect(e.Source()).To(Equal("gs://" + bucket))
 			})
 		})
 	})
 
-	Context("a source watches an existing subscription", func() {
-		var pubsubClient *pubsub.Client
-		var err error
-
-		BeforeEach(func() {
-			saKey = e2egcloud.GetCreds(credsEnvVar)
-			project = e2egcloud.GetProject(projectEnvVar)
-			pubsubClient, err = pubsub.NewClient(context.Background(), project, option.WithCredentialsJSON([]byte(saKey)))
-			Expect(err).ToNot(HaveOccurred())
-
-			By("creating an event sink", func() {
-				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-			})
-
-			By("creating a pubsub topic", func() {
-				topic = e2epubsub.CreateTopic(pubsubClient, f)
-			})
-
-			By("creating a pubsub subscription", func() {
-				subscription = e2epubsub.CreateSubscription(pubsubClient, topic, f)
-			})
-
-			By("creating a GoogleCloudPubSub object", func() {
-				src, err := createSource(srcClient, ns, "test-", sink,
-					withTopic(topic.String()),
-					withSubscription(subscription),
-					withCredentials(saKey),
-				)
-				Expect(err).ToNot(HaveOccurred())
-				ducktypes.WaitUntilReady(f.DynamicClient, src)
-			})
-		})
-
-		AfterEach(func() {
-			By("deleting pubsub topic "+topic.String(), func() {
-				e2epubsub.DeleteTopic(pubsubClient, topic)
-			})
-		})
-
-		When("a message is sent to the topic", func() {
-			var msgId string
-
-			BeforeEach(func() {
-				msgId = e2epubsub.SendMessage(pubsubClient, topic, f)
-			})
-
-			Specify("the source generates an event", func() {
-				const receiveTimeout = 15 * time.Second
-				const pollInterval = 500 * time.Millisecond
-
-				var receivedEvents []cloudevents.Event
-
-				readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
-
-				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
-				Expect(receivedEvents).To(HaveLen(1))
-
-				e := receivedEvents[0]
-
-				Expect(e.Type()).To(Equal("com.google.cloud.pubsub.message"))
-				Expect(e.ID()).To(Equal(msgId))
-				Expect(e.Source()).To(Equal(topic.String()))
-			})
-		})
-	})
-
-	When("a client creates a source object with invalid specs", func() {
+	When("a client creates a source object with invalid event Types", func() {
 
 		// Those tests do not require a real repository or sink
 		BeforeEach(func() {
@@ -233,22 +174,23 @@ var _ = Describe("Google Cloud PubSub source", func() {
 		// to avoid creating a namespace for each spec, due to their simplicity.
 		Specify("the API server rejects the creation of that object", func() {
 
-			By("setting an invalid topic", func() {
-				invalidTopic := "projects/fake-project/topics//"
+			By("setting an invalid bucket", func() {
+				bucket := "fake-bucket"
 
-				_, err := createSource(srcClient, ns, "test-invalid-topic-", sink,
-					withTopic(invalidTopic),
+				_, err := createSource(srcClient, ns, "test-invalid-eventTypes-", sink,
+					withBucket(bucket),
+					withProject(project),
+					withEventTypes("invalidType"),
 					withCredentials(saKey),
 				)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("spec.topic: Invalid value: "))
+				Expect(err.Error()).To(ContainSubstring(`spec.eventTypes: Unsupported value: "invalidType"`))
 			})
-
 		})
 	})
 })
 
-// createSource creates an GoogleCloudPubSub object initialized with the given options.
+// createSource creates a GoogleCloudStorage object initialized with the given options.
 func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
 	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
 
@@ -271,18 +213,33 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 type sourceOption func(*unstructured.Unstructured)
 
-func withTopic(topic string) sourceOption {
+func withBucket(bucket string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, topic, "spec", "topic"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.topic field: %s", err)
+		if err := unstructured.SetNestedField(src.Object, bucket, "spec", "bucket"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.bucket field: %s", err)
 		}
 	}
 }
 
-func withSubscription(subscription string) sourceOption {
+func withProject(project string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, subscription, "spec", "subscription"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.subscription field: %s", err)
+		if err := unstructured.SetNestedField(src.Object, project, "spec", "pubsub", "project"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.pubsub.project field: %s", err)
+		}
+	}
+}
+
+func withEventTypes(eventType string) sourceOption {
+	return func(src *unstructured.Unstructured) {
+		eventTypes, _, err := unstructured.NestedStringSlice(src.Object, "spec", "eventTypes")
+		if err != nil {
+			framework.FailfWithOffset(3, "Error reading spec.eventTypes field: %s", err)
+		}
+
+		eventTypes = append(eventTypes, eventType)
+
+		if err := unstructured.SetNestedStringSlice(src.Object, eventTypes, "spec", "eventTypes"); err != nil {
+			framework.FailfWithOffset(3, "Failed to set spec.eventTypes field: %s", err)
 		}
 	}
 }
