@@ -80,8 +80,11 @@ func DeleteBucket(storageCli *storage.Client, bucketName string) error {
 
 // DeleteObject deletes an object.
 func DeleteObject(storageCli *storage.Client, bucketName string, objectName string) error {
-	object := storageCli.Bucket(bucketName).Object(objectName)
+	if err := os.Remove("/tmp/" + objectName); err != nil {
+		framework.FailfWithOffset(2, "Failed to delete file %q: %s", objectName, err)
+	}
 
+	object := storageCli.Bucket(bucketName).Object(objectName)
 	if err := object.Delete(context.Background()); err != nil {
 		framework.FailfWithOffset(2, "Failed to delete object %q: %s", objectName, err)
 	}
