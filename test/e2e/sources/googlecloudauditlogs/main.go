@@ -174,12 +174,23 @@ var _ = Describe("Google Cloud AuditLogs source", func() {
 			By("setting an invalid service name", func() {
 				_, err := createSource(srcClient, ns, "test-invalid-service-name-", sink,
 					withServiceName(invalidServiceName),
+					withMethodName(methodName),
 					withCredentials(saKey),
 				)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("spec.serviceName: Invalid value: "))
 			})
 
+			invalidMethodName := "google.pubsub.v1.Publisher.CreateTopic."
+			By("setting an invalid method name", func() {
+				_, err := createSource(srcClient, ns, "test-invalid-service-name-", sink,
+					withServiceName(serviceName),
+					withMethodName(invalidMethodName),
+					withCredentials(saKey),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("spec.methodName: Invalid value: "))
+			})
 		})
 	})
 })
