@@ -24,6 +24,7 @@ import (
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssns"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssqs"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudpubsub"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudrepositories"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudstorage"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/webhook"
 )
