@@ -72,11 +72,12 @@ var _ = Describe("Slack target", func() {
 	var receivedEvent chan slack.RTMEvent
 
 	// Kill the websocket connection when finished. This will run regardless of failure state
-	AfterSuite(func() {
+	AfterEach(func() {
 		// Shut down the Slack service
 		if rtm != nil {
 			err := rtm.Disconnect()
 			Expect(err).ToNot(HaveOccurred())
+			rtm = nil
 		}
 	})
 
