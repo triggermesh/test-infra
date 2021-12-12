@@ -86,7 +86,7 @@ type AzureEventHubClient struct {
  * Send an event to the AzureEventHubSource and look for a response
 */
 
-var _ = FDescribe("Azure EventHubs", func() {
+var _ = Describe("Azure EventHubs", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	region := "westus2" // Default to WestUS2 for now
