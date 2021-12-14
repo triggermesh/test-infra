@@ -47,5 +47,5 @@ func DeleteRepository(repoCli *sourcerepo.Service, name string) error {
 		framework.FailfWithOffset(2, "Failed to delete repo %q: %s", name, err)
 	}
 
-	return err
+	return nil
 }

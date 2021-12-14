@@ -143,19 +143,6 @@ var _ = Describe("Google Cloud Repositories source", func() {
 
 	When("a client creates a source object with invalid repository", func() {
 
-		// Those tests do not require a real repository or sink
-		BeforeEach(func() {
-			saKey = "fake-creds"
-
-			sink = &duckv1.Destination{
-				Ref: &duckv1.KReference{
-					APIVersion: "fake/v1",
-					Kind:       "Fake",
-					Name:       "fake",
-				},
-			}
-		})
-
 		// Here we use
 		//   "Specify: the API server rejects ..., By: setting an invalid ..."
 		// instead of
@@ -163,7 +150,17 @@ var _ = Describe("Google Cloud Repositories source", func() {
 		// to avoid creating a namespace for each spec, due to their simplicity.
 		Specify("the API server rejects the creation of that object", func() {
 
-			By("setting an invalid bucket", func() {
+			By("setting an invalid repository", func() {
+				saKey = "fake-creds"
+
+				sink = &duckv1.Destination{
+					Ref: &duckv1.KReference{
+						APIVersion: "fake/v1",
+						Kind:       "Fake",
+						Name:       "fake",
+					},
+				}
+
 				repo := "projects/fake-project/repos//"
 
 				_, err := createSource(srcClient, ns, "test-invalid-repository-", sink,
