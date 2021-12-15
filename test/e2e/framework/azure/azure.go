@@ -71,3 +71,15 @@ func DeleteResourceGroup(ctx context.Context, subscriptionID, name string) resou
 
 	return rgf
 }
+
+// WaitForFutureDeletion will wait on the resource to be deleted before continuing
+func WaitForFutureDeletion(ctx context.Context, subscriptionID string, future resources.GroupsDeleteFuture) {
+	authorizer, _ := auth.NewAuthorizerFromEnvironment()
+	rgClient := resources.NewGroupsClient(subscriptionID)
+	rgClient.Authorizer = authorizer
+
+	err := future.WaitForCompletionRef(ctx, rgClient.Client)
+	if err != nil {
+		framework.FailfWithOffset(3, "resource group deletion failed: %s", err)
+	}
+}

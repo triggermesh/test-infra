@@ -14,12 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package azureeventhubs
+package azureactivitylog
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -65,8 +63,8 @@ var sourceAPIVersion = schema.GroupVersion{
 }
 
 const (
-	sourceKind     = "AzureEventHubSource"
-	sourceResource = "azureeventhubsource"
+	sourceKind     = "AzureActivityLogsSource"
+	sourceResource = "azureactivitylogssource"
 )
 
 type AzureEventHubClient struct {
@@ -80,11 +78,11 @@ type AzureEventHubClient struct {
  Basic flow will resemble:
  * Create a resource group to contain our eventhub
  * Ensure our service principal can read/write from the eventhub
- * Instantiate the AzureEventHubSource
- * Send an event to the AzureEventHubSource and look for a response
+ * Instantiate the AzureActivityLogsSource
+ * Create a resource group and watch the event flow in
 */
 
-var _ = Describe("Azure EventHubs", func() {
+var _ = Describe("Azure Activity Logs", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	region := "westus2" // Default to WestUS2 for now
@@ -96,7 +94,6 @@ var _ = Describe("Azure EventHubs", func() {
 	var sink *duckv1.Destination
 
 	var rg resources.Group
-	var hub *eventhubs.Hub
 
 	BeforeEach(func() {
 		ns = f.UniqueName
@@ -104,12 +101,13 @@ var _ = Describe("Azure EventHubs", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, rg)
+		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, rg)
 
 	})
 
-	Context("a source watches an EventHub", func() {
+	Context("a source watches an EventHub publishing Activity Log data", func() {
 		var err error // stubbed
+		var testRG resources.Group
 
 		When("an event flows", func() {
 			It("should create an azure eventhub", func() {
@@ -117,28 +115,30 @@ var _ = Describe("Azure EventHubs", func() {
 					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 				})
 
+				By("creating a sample resource group to produce activity", func() {
+					testRG = azure.CreateResourceGroup(ctx, subscriptionID, *rg.Name+"-testrg", region)
+				})
+
 				var src *unstructured.Unstructured
-				By("creating the azureeventhubsource", func() {
+				By("creating the azureactivitylog source", func() {
 					src, err = createSource(srcClient, ns, "test-", sink,
 						withServicePrincipal(),
 						withSubscriptionID(subscriptionID),
-						withEventHubID(createEventhubID(subscriptionID, ns)),
+						withActivityCategories([]string{"Administrative", "Policy", "Security"}),
+						withEventHubNS(createEventHubNS(subscriptionID, ns)),
+						withEventHubID(ns),
 					)
 
 					Expect(err).ToNot(HaveOccurred())
 
 					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(5 * time.Second)
 				})
 
-				By("sending an event", func() {
-					ev := eventhubs.NewEvent([]byte("hello world"))
-					err = hub.Send(ctx, ev, eventhubs.SendWithMessageID("12345"))
-					Expect(err).ToNot(HaveOccurred())
-				})
+				By("verifying the event was sent by deleting a resource", func() {
+					deleteFuture := azure.DeleteResourceGroup(ctx, subscriptionID, *testRG.Name)
+					azure.WaitForFutureDeletion(ctx, subscriptionID, deleteFuture)
 
-				By("verifying the event was sent", func() {
-					const receiveTimeout = 15 * time.Second // it takes events a little longer to flow in from azure
+					const receiveTimeout = 300 * time.Second // It can take up to 5 minutes for an event to appear
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event
@@ -146,17 +146,7 @@ var _ = Describe("Azure EventHubs", func() {
 					readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
 
 					Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
-					Expect(receivedEvents).To(HaveLen(1))
-
-					e := receivedEvents[0]
-
-					Expect(e.Type()).To(Equal("com.microsoft.azure.eventhub.message"))
-					Expect(e.Source()).To(Equal(createEventhubID(subscriptionID, ns)))
-
-					data := make(map[string]interface{})
-					err = json.Unmarshal(e.Data(), &data)
-					testID := fmt.Sprintf("%v", data["ID"])
-					Expect(data["ID"]).To(Equal(testID))
+					Expect(receivedEvents).ToNot(BeEmpty()) // In some cases will receive either 1 or 2 events
 				})
 			})
 		})
@@ -193,9 +183,31 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 // Define the creation parameters to pass along
 
+func withEventHubNS(ns string) sourceOption {
+	return func(src *unstructured.Unstructured) {
+		if err := unstructured.SetNestedField(src.Object, ns, "spec", "destination", "eventHubs", "namespaceID"); err != nil {
+			framework.FailfWithOffset(3, "failed to set spec.destination.eventHubs.namespaceID: %s", err)
+		}
+	}
+}
+
 func withEventHubID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, id, "spec", "eventHubID"); err != nil {
+		if err := unstructured.SetNestedField(src.Object, id, "spec", "destination", "eventHubs", "hubName"); err != nil {
+			framework.FailfWithOffset(3, "failed to set spec.destination.eventHubs.hubName: %s", err)
+		}
+	}
+}
+
+func withActivityCategories(categories []string) sourceOption {
+	// The make slice and for loop is to ensure the string array gets converted to an interface array
+	iarray := make([]interface{}, len(categories))
+	for i := range categories {
+		iarray[i] = categories[i]
+	}
+
+	return func(src *unstructured.Unstructured) {
+		if err := unstructured.SetNestedSlice(src.Object, iarray, "spec", "categories"); err != nil {
 			framework.FailfWithOffset(3, "failed to set spec.eventHubID: %s", err)
 		}
 	}
@@ -242,6 +254,6 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 }
 
 // createEventhubID will create the EventHub path used by the k8s azureeventhubssource
-func createEventhubID(subscriptionID, testName string) string {
-	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName + "/eventHubs/" + testName
+func createEventHubNS(subscriptionID, testName string) string {
+	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName
 }
