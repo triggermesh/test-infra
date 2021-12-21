@@ -50,6 +50,7 @@ import (
   - AZURE_TENANT_ID - Azure tenant to create the resources against
   - AZURE_CLIENT_ID - The Azure ServicePrincipal Client ID
   - AZURE_CLIENT_SECRET - The Azure ServicePrincipal Client Secret
+  - AZURE_REGION - Define the Azure region to run the test (default uswest2)
 
   These will be done by the e2e test:
   - Create an Azure Resource Group, EventHubs Namespace, and EventHub
@@ -85,7 +86,11 @@ type AzureEventHubClient struct {
 var _ = Describe("Azure Activity Logs", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	region := "westus2" // Default to WestUS2 for now
+	region := os.Getenv("AZURE_REGION")
+
+	if region == "" {
+		region = "westus2"
+	}
 
 	f := framework.New(sourceResource)
 
@@ -126,7 +131,7 @@ var _ = Describe("Azure Activity Logs", func() {
 						withSubscriptionID(subscriptionID),
 						withActivityCategories([]string{"Administrative", "Policy", "Security"}),
 						withEventHubNS(createEventHubNS(subscriptionID, ns)),
-						withEventHubID(ns),
+						withEventHubName(ns),
 					)
 
 					Expect(err).ToNot(HaveOccurred())
@@ -191,9 +196,9 @@ func withEventHubNS(ns string) sourceOption {
 	}
 }
 
-func withEventHubID(id string) sourceOption {
+func withEventHubName(name string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, id, "spec", "destination", "eventHubs", "hubName"); err != nil {
+		if err := unstructured.SetNestedField(src.Object, name, "spec", "destination", "eventHubs", "hubName"); err != nil {
 			framework.FailfWithOffset(3, "failed to set spec.destination.eventHubs.hubName: %s", err)
 		}
 	}

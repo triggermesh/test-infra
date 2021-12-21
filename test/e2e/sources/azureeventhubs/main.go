@@ -52,6 +52,7 @@ import (
   - AZURE_TENANT_ID - Azure tenant to create the resources against
   - AZURE_CLIENT_ID - The Azure ServicePrincipal Client ID
   - AZURE_CLIENT_SECRET - The Azure ServicePrincipal Client Secret
+  - AZURE_REGION - Define the Azure region to run the test (default uswest2)
 
   These will be done by the e2e test:
   - Create an Azure Resource Group, EventHubs Namespace, and EventHub
@@ -87,7 +88,11 @@ type AzureEventHubClient struct {
 var _ = Describe("Azure EventHubs", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	region := "westus2" // Default to WestUS2 for now
+	region := os.Getenv("AZURE_REGION")
+
+	if region == "" {
+		region = "westus2"
+	}
 
 	f := framework.New(sourceResource)
 
