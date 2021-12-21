@@ -52,10 +52,7 @@ import (
   - AZURE_TENANT_ID - Azure tenant to create the resources against
   - AZURE_CLIENT_ID - The Azure ServicePrincipal Client ID
   - AZURE_CLIENT_SECRET - The Azure ServicePrincipal Client Secret
-<<<<<<< HEAD
-=======
   - AZURE_REGION - Define the Azure region to run the test (default uswest2)
->>>>>>> origin
 
   These will be done by the e2e test:
   - Create an Azure Resource Group, EventHubs Namespace, and EventHub
