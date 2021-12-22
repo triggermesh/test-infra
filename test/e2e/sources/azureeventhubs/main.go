@@ -23,9 +23,8 @@ import (
 	"os"
 	"time"
 
-	eventhubs "github.com/Azure/azure-event-hubs-go"
-	"github.com/Azure/azure-sdk-for-go/services/eventhub/mgmt/2017-04-01/eventhub"
-	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
+	eventhubs "github.com/Azure/azure-event-hubs-go/v3"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/triggermesh/test-infra/test/e2e/framework/azure"
@@ -70,13 +69,6 @@ const (
 	sourceResource = "azureeventhubsource"
 )
 
-type AzureEventHubClient struct {
-	NamespaceClient eventhub.NamespacesClient
-	GroupClient     resources.GroupsClient
-	HubClient       eventhub.EventHubsClient
-	Hub             *eventhubs.Hub
-}
-
 /*
  Basic flow will resemble:
  * Create a resource group to contain our eventhub
@@ -100,7 +92,7 @@ var _ = Describe("Azure EventHubs", func() {
 	var srcClient dynamic.ResourceInterface
 	var sink *duckv1.Destination
 
-	var rg resources.Group
+	var rg armresources.ResourceGroup
 	var hub *eventhubs.Hub
 
 	BeforeEach(func() {
@@ -109,7 +101,7 @@ var _ = Describe("Azure EventHubs", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, rg)
+		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
 
 	})
 

@@ -21,9 +21,7 @@ import (
 	"os"
 	"time"
 
-	eventhubs "github.com/Azure/azure-event-hubs-go"
-	"github.com/Azure/azure-sdk-for-go/services/eventhub/mgmt/2017-04-01/eventhub"
-	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/triggermesh/test-infra/test/e2e/framework/azure"
@@ -68,13 +66,6 @@ const (
 	sourceResource = "azureactivitylogssource"
 )
 
-type AzureEventHubClient struct {
-	NamespaceClient eventhub.NamespacesClient
-	GroupClient     resources.GroupsClient
-	HubClient       eventhub.EventHubsClient
-	Hub             *eventhubs.Hub
-}
-
 /*
  Basic flow will resemble:
  * Create a resource group to contain our eventhub
@@ -98,7 +89,7 @@ var _ = Describe("Azure Activity Logs", func() {
 	var srcClient dynamic.ResourceInterface
 	var sink *duckv1.Destination
 
-	var rg resources.Group
+	var rg armresources.ResourceGroup
 
 	BeforeEach(func() {
 		ns = f.UniqueName
@@ -106,13 +97,13 @@ var _ = Describe("Azure Activity Logs", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, rg)
+		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
 
 	})
 
 	Context("a source watches an EventHub publishing Activity Log data", func() {
 		var err error // stubbed
-		var testRG resources.Group
+		var testRG armresources.ResourceGroup
 
 		When("an event flows", func() {
 			It("should create an azure eventhub", func() {
@@ -143,7 +134,7 @@ var _ = Describe("Azure Activity Logs", func() {
 					deleteFuture := azure.DeleteResourceGroup(ctx, subscriptionID, *testRG.Name)
 					azure.WaitForFutureDeletion(ctx, subscriptionID, deleteFuture)
 
-					const receiveTimeout = 300 * time.Second // It can take up to 5 minutes for an event to appear
+					const receiveTimeout = 600 * time.Second // It can take up to 5 minutes for an event to appear
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event

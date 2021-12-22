@@ -18,60 +18,63 @@ package azure
 
 import (
 	"context"
+	"time"
 
-	eventhubs "github.com/Azure/azure-event-hubs-go"
-	"github.com/Azure/azure-sdk-for-go/services/eventhub/mgmt/2017-04-01/eventhub"
-	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
+	eventhubs "github.com/Azure/azure-event-hubs-go/v3"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub"
+
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region string, rg resources.Group) *eventhubs.Hub {
-	nsClient := eventhub.NewNamespacesClient(subscriptionID)
-	ehClient := eventhub.NewEventHubsClient(subscriptionID)
-
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
+func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region, rg string) *eventhubs.Hub {
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create authorizer: %s", err)
-		return nil
+		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
 	}
 
-	nsClient.Authorizer = authorizer
-	ehClient.Authorizer = authorizer
+	nsClient := armeventhub.NewNamespacesClient(subscriptionID, cred, nil)
+	ehClient := armeventhub.NewEventHubsClient(subscriptionID, cred, nil)
 
 	// create the eventhubs namespace
-	nsFuture, err := nsClient.CreateOrUpdate(ctx, *rg.Name, name, eventhub.EHNamespace{Location: to.StringPtr(region)})
-	if err != nil {
-		framework.FailfWithOffset(3, "unable to create eventhubs namespace: %s", err)
-		return nil
-	}
-
-	// Wait for the namespace to be created before creating the eventhub
-	err = nsFuture.WaitForCompletionRef(ctx, nsClient.Client)
-	if err != nil {
-		framework.FailfWithOffset(3, "unable to complete eventhubs namespace creation: %s", err)
-		return nil
-	}
-
-	ns, err := nsFuture.Result(nsClient)
-	if err != nil {
-		framework.FailfWithOffset(3, "eventhubs namespace creation failed: %s", err)
-		return nil
-	}
-
-	_, err = ehClient.CreateOrUpdate(ctx, *rg.Name, *ns.Name, name, eventhub.Model{
-		Properties: &eventhub.Properties{
-			PartitionCount: to.Int64Ptr(2),
+	nsResp, err := nsClient.BeginCreateOrUpdate(ctx, rg, name, armeventhub.EHNamespace{
+		TrackedResource: armeventhub.TrackedResource{
+			Location: &region,
+			Tags:     map[string]*string{E2EInstanceTagKey: to.StringPtr(name)},
 		},
-	})
+		Identity: &armeventhub.Identity{
+			Type: armeventhub.ManagedServiceIdentityTypeNone.ToPtr(),
+		},
+		SKU: &armeventhub.SKU{
+			Name:     armeventhub.SKUNameBasic.ToPtr(),
+			Capacity: to.Int32Ptr(1),
+			Tier:     armeventhub.SKUTierBasic.ToPtr(),
+		},
+	}, nil)
+
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to create eventhub namespace: %s", err)
+	}
+
+	_, err = nsResp.PollUntilDone(ctx, time.Second*30)
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to create eventhub namespace: %s", err)
+	}
+
+	ehResp, err := ehClient.CreateOrUpdate(ctx, rg, name, name, armeventhub.Eventhub{
+		Properties: &armeventhub.EventhubProperties{
+			MessageRetentionInDays: to.Int64Ptr(1),
+			PartitionCount:         to.Int64Ptr(2),
+		},
+	}, nil)
 
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to create eventhub: %s", err)
 		return nil
 	}
 
-	keys, err := nsClient.ListKeys(ctx, *rg.Name, *ns.Name, "RootManageSharedAccessKey")
+	keys, err := nsClient.ListKeys(ctx, rg, *ehResp.Name, "RootManageSharedAccessKey", nil)
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
 		return nil
