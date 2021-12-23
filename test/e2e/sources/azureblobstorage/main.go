@@ -82,7 +82,7 @@ const (
  Basic flow will resemble:
  * Create a resource group to contain our eventhub
  * Ensure our service principal can read/write from the eventhub
- * Instantiate the AzureEventHubSource
+ * Instantiate the AzureBlobStorageSource
  * Instantiate the Azure Storage Account and create a container for our blob
  * Create a new file, upload it to the blob, verify the event
  * Delete the blob and verify the event
@@ -250,7 +250,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withStorageAccountID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "storageAccountID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(3, "failed to set spec.storageAccountID: %s", err)
 		}
 	}
 }
@@ -258,7 +258,7 @@ func withStorageAccountID(id string) sourceOption {
 func withEventHubEndpoint(namespaceID string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, namespaceID, "spec", "endpoint", "eventHubs", "namespaceID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(3, "failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
 		}
 	}
 }
@@ -266,7 +266,7 @@ func withEventHubEndpoint(namespaceID string) sourceOption {
 func withEventTypes(eventTypes []string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedStringSlice(src.Object, eventTypes, "spec", "eventTypes"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(3, "failed to set spec.eventTypes: %s", err)
 		}
 	}
 }
