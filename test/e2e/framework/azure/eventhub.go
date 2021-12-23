@@ -28,7 +28,7 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region, rg string) *eventhubs.Hub {
+func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region, rg string, omitHub bool) *eventhubs.Hub {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
@@ -62,31 +62,35 @@ func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region,
 		framework.FailfWithOffset(3, "unable to create eventhub namespace: %s", err)
 	}
 
-	ehResp, err := ehClient.CreateOrUpdate(ctx, rg, name, name, armeventhub.Eventhub{
-		Properties: &armeventhub.EventhubProperties{
-			MessageRetentionInDays: to.Int64Ptr(1),
-			PartitionCount:         to.Int64Ptr(2),
-		},
-	}, nil)
+	if !omitHub {
+		ehResp, err := ehClient.CreateOrUpdate(ctx, rg, name, name, armeventhub.Eventhub{
+			Properties: &armeventhub.EventhubProperties{
+				MessageRetentionInDays: to.Int64Ptr(1),
+				PartitionCount:         to.Int64Ptr(2),
+			},
+		}, nil)
 
-	if err != nil {
-		framework.FailfWithOffset(3, "unable to create eventhub: %s", err)
-		return nil
+		if err != nil {
+			framework.FailfWithOffset(3, "unable to create eventhub: %s", err)
+			return nil
+		}
+
+		keys, err := nsClient.ListKeys(ctx, rg, *ehResp.Name, "RootManageSharedAccessKey", nil)
+		if err != nil {
+			framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
+			return nil
+		}
+
+		// Take the namespace connection string, and add the specific eventhub
+		connectionString := *keys.PrimaryConnectionString + ";EntityPath=" + name
+		hub, err := eventhubs.NewHubFromConnectionString(connectionString)
+		if err != nil {
+			framework.FailfWithOffset(3, "unable to create eventhub client: %s", err)
+			return nil
+		}
+
+		return hub
 	}
 
-	keys, err := nsClient.ListKeys(ctx, rg, *ehResp.Name, "RootManageSharedAccessKey", nil)
-	if err != nil {
-		framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
-		return nil
-	}
-
-	// Take the namespace connection string, and add the specific eventhub
-	connectionString := *keys.PrimaryConnectionString + ";EntityPath=" + name
-	hub, err := eventhubs.NewHubFromConnectionString(connectionString)
-	if err != nil {
-		framework.FailfWithOffset(3, "unable to create eventhub client: %s", err)
-		return nil
-	}
-
-	return hub
+	return nil
 }

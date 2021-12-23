@@ -97,7 +97,7 @@ var _ = Describe("Azure Activity Logs", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
+		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, false)
 
 	})
 
@@ -134,7 +134,7 @@ var _ = Describe("Azure Activity Logs", func() {
 					deleteFuture := azure.DeleteResourceGroup(ctx, subscriptionID, *testRG.Name)
 					azure.WaitForFutureDeletion(ctx, subscriptionID, deleteFuture)
 
-					const receiveTimeout = 600 * time.Second // It can take up to 5 minutes for an event to appear
+					const receiveTimeout = 900 * time.Second // It can take up to 15 minutes for an event to appear
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event

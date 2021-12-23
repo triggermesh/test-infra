@@ -101,7 +101,7 @@ var _ = Describe("Azure EventHubs", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
+		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, false)
 
 	})
 

@@ -19,6 +19,8 @@ package azureblobstorage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -86,7 +88,7 @@ const (
  * Delete the blob and verify the event
 */
 
-var _ = FDescribe("Azure Blob Storage", func() {
+var _ = Describe("Azure Blob Storage", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	region := os.Getenv("AZURE_REGION")
@@ -98,6 +100,7 @@ var _ = FDescribe("Azure Blob Storage", func() {
 	f := framework.New(sourceResource)
 
 	var ns string
+	var saName string
 	var srcClient dynamic.ResourceInterface
 	var sink *duckv1.Destination
 
@@ -112,7 +115,7 @@ var _ = FDescribe("Azure Blob Storage", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
+		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, true)
 	})
 
 	Context("an Azure Blob is created and deleted ", func() {
@@ -126,7 +129,7 @@ var _ = FDescribe("Azure Blob Storage", func() {
 
 				By("creating the Azure Storage Account", func() {
 					// storageaccount name must be alphanumeric characters only and 3-24 characters long
-					saName := strings.Replace(ns, "-", "", -1)
+					saName = strings.Replace(ns, "-", "", -1)
 					saName = strings.Replace(saName, "e2eazureblobstoragesource", "tme2etest", -1)
 					sa = createStorageAccount(ctx, subscriptionID, *rg.Name, saName, region)
 				})
@@ -141,21 +144,22 @@ var _ = FDescribe("Azure Blob Storage", func() {
 						withServicePrincipal(),
 						withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
 						withEventHubEndpoint(createEventhubID(subscriptionID, ns)),
-						withStorageAccountID(createStorageAccountID(subscriptionID, ns)),
+						withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
 					)
 
 					Expect(err).ToNot(HaveOccurred())
 
 					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(5 * time.Second)
+					time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
 				})
 
 				By("uploading a blob", func() {
-					uploadBlob(ctx, container, sa, ns, "hello e2e test")
+					uploadBlob(ctx, container, sa, ns, generatePayload(4096))
+					time.Sleep(30 * time.Second) // wait for the blob to be created
 				})
 
 				By("verifying an event was received", func() {
-					const receiveTimeout = 15 * time.Second // it takes events a little longer to flow in from azure
+					const receiveTimeout = 60 * time.Second // it takes events a little longer to flow in from azure
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event
@@ -168,7 +172,7 @@ var _ = FDescribe("Azure Blob Storage", func() {
 					e := receivedEvents[0]
 
 					Expect(e.Type()).To(Equal("Microsoft.Storage.BlobCreated"))
-					Expect(e.Source()).To(Equal(createStorageAccountID(subscriptionID, ns)))
+					Expect(e.Source()).To(Equal(createStorageAccountID(subscriptionID, ns, saName)))
 
 					// Verify the put request
 					var data map[string]interface{}
@@ -181,10 +185,11 @@ var _ = FDescribe("Azure Blob Storage", func() {
 
 				By("deleting a blob", func() {
 					deleteBlob(ctx, container, sa, ns)
+					time.Sleep(60 * time.Second) // wait for the blob to be deleted
 				})
 
 				By("verifying a second event was received", func() {
-					const receiveTimeout = 15 * time.Second // it takes events a little longer to flow in from azure
+					const receiveTimeout = 60 * time.Second // it takes events a little longer to flow in from azure
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event
@@ -197,7 +202,7 @@ var _ = FDescribe("Azure Blob Storage", func() {
 					e := receivedEvents[1]
 
 					Expect(e.Type()).To(Equal("Microsoft.Storage.BlobDeleted"))
-					Expect(e.Source()).To(Equal(createStorageAccountID(subscriptionID, ns)))
+					Expect(e.Source()).To(Equal(createStorageAccountID(subscriptionID, ns, saName)))
 
 					// Verify the put request
 					var data map[string]interface{}
@@ -244,7 +249,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 func withStorageAccountID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, id, "spec", "storageAccountId"); err != nil {
+		if err := unstructured.SetNestedField(src.Object, id, "spec", "storageAccountID"); err != nil {
 			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
 		}
 	}
@@ -304,8 +309,8 @@ func createEventhubID(subscriptionID, testName string) string {
 }
 
 // createStorageAccountID will create the StorageAccountID path used by the k8s
-func createStorageAccountID(subscriptionID, testName string) string {
-	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.Storage/storageAccounts/" + testName
+func createStorageAccountID(subscriptionID, rgName, saName string) string {
+	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + rgName + "/providers/Microsoft.Storage/storageAccounts/" + saName
 }
 
 // createStorageBlobAccount creates a new storage account and blob container to
@@ -367,7 +372,8 @@ func uploadBlob(ctx context.Context, container armstorage.BlobContainer, sa arms
 		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
 	}
 
-	containerClient, err := azblob.NewContainerClient(*sa.Properties.PrimaryLocation+*container.Name, cred, nil)
+	url := "https://" + *sa.Name + azureBlobStorageURL + *container.Name
+	containerClient, err := azblob.NewContainerClient(url, cred, nil)
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to obtain blob client: %s", err)
 	}
@@ -387,7 +393,8 @@ func deleteBlob(ctx context.Context, container armstorage.BlobContainer, sa arms
 		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
 	}
 
-	containerClient, err := azblob.NewContainerClient(*sa.Properties.PrimaryLocation+*container.Name, cred, nil)
+	url := "https://" + *sa.Name + azureBlobStorageURL + *container.Name
+	containerClient, err := azblob.NewContainerClient(url, cred, nil)
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to obtain blob client: %s", err)
 	}
@@ -397,6 +404,17 @@ func deleteBlob(ctx context.Context, container armstorage.BlobContainer, sa arms
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to delete blob: %s", err)
 	}
+}
+
+func generatePayload(size int) string {
+	var sb strings.Builder
+
+	for i := 0; i < size; i++ {
+		s := fmt.Sprintf("%d", rand.Int31())
+		sb.WriteString(s)
+	}
+
+	return sb.String()
 }
 
 // ReadSeekCloser implements a closer with Seek, Read, and Close
