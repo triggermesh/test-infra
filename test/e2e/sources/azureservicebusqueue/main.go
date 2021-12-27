@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/servicebus/mgmt/servicebus"
-	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	sv "github.com/Azure/azure-service-bus-go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -80,7 +80,11 @@ const (
 var _ = Describe("Azure ServiceBusQueue", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	region := "westus2"
+	region := os.Getenv("AZURE_REGION")
+
+	if region == "" {
+		region = "westus2"
+	}
 
 	f := framework.New(sourceResource)
 
@@ -88,7 +92,7 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 	var srcClient dynamic.ResourceInterface
 	var sink *duckv1.Destination
 
-	var rg resources.Group
+	var rg armresources.ResourceGroup
 	var queue *sv.QueueEntity
 	var queueSender *sv.Queue
 
@@ -98,8 +102,8 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		nsClient := e2eazure.CreateNamespaceClient(ctx, subscriptionID, ns)
-		err := e2eazure.CreateNamespace(ctx, *nsClient, *rg.Name, ns, region)
+		nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
+		err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
 		Expect(err).ToNot(HaveOccurred())
 		queue, queueSender = createQueue(ctx, region, ns, nsClient)
 	})
@@ -122,7 +126,6 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(15 * time.Second)
 				})
 
 				By("sending an event", func() {

@@ -6,7 +6,9 @@ require (
 	cloud.google.com/go/pubsub v1.6.1
 	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-event-hubs-go v1.3.1
-	github.com/Azure/azure-sdk-for-go v51.1.0+incompatible
+	github.com/Azure/azure-sdk-for-go v59.0.0+incompatible
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.12.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v0.2.0
 	github.com/Azure/azure-service-bus-go v0.11.5
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.4.0

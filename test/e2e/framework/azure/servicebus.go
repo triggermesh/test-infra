@@ -26,8 +26,8 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-// CreateNamespaceClient will create the servicebus client
-func CreateNamespaceClient(ctx context.Context, subscriptionID, region string) *servicebus.NamespacesClient {
+// CreateServiceBusNamespaceClient will create the servicebus client
+func CreateServiceBusNamespaceClient(ctx context.Context, subscriptionID, region string) *servicebus.NamespacesClient {
 	nsClient := servicebus.NewNamespacesClient(subscriptionID)
 
 	authorizer, err := auth.NewAuthorizerFromEnvironment()
@@ -41,7 +41,7 @@ func CreateNamespaceClient(ctx context.Context, subscriptionID, region string) *
 	return &nsClient
 }
 
-func CreateNamespace(ctx context.Context, cli servicebus.NamespacesClient, rgName string, nsName string, region string) error {
+func CreateServiceBusNamespace(ctx context.Context, cli servicebus.NamespacesClient, rgName string, nsName string, region string) error {
 	// create the servicebus namespace
 	nsFuture, err := cli.CreateOrUpdate(ctx, rgName, nsName, servicebus.SBNamespace{Location: to.StringPtr(region)})
 	if err != nil {
