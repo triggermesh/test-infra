@@ -133,7 +133,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 				})
 
 				By("verifying the event was sent", func() {
-					const receiveTimeout = 25 * time.Second
+					const receiveTimeout = 25 * time.Second // It needs some more time than our default 15s.
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event
