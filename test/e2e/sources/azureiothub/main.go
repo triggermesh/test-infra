@@ -102,7 +102,7 @@ var _ = Describe("Azure IOT Hub Source", func() {
 		deviceKey, iotHubAddress = azure.CreateIOTHubComponents(ctx, subscriptionID, *rg.Name, region, ns)
 	})
 
-	Context("a source watches an IOTEventHub for a device message", func() {
+	Context("a source watches an IOTHub for a device message", func() {
 		var err error // stubbed
 
 		When("an event flows", func() {
@@ -163,7 +163,7 @@ var _ = Describe("Azure IOT Hub Source", func() {
 
 type sourceOption func(*unstructured.Unstructured)
 
-// createSource creates an AzureEventHubSource object initialized with the test parameters
+// createSource creates an AzureIOTHubSource object initialized with the test parameters
 func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
 	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
 	src := &unstructured.Unstructured{}
@@ -191,7 +191,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withSASToken(sasToken string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, sasToken, "spec", "auth", "sasToken", "connectionString", "value"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.eventHubID: %s", err)
+			framework.FailfWithOffset(3, "failed to set spec.auth.sasToken.connectionString.value: %s", err)
 		}
 	}
 }
