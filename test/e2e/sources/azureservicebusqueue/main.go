@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package azureservicebustopic
+package azureservicebusqueue
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/servicebus/mgmt/servicebus"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	sv "github.com/Azure/azure-service-bus-go"
 	. "github.com/onsi/ginkgo"
@@ -53,7 +54,7 @@ import (
   - AZURE_CLIENT_SECRET - The Azure ServicePrincipal Client Secret
 
   These will be done by the e2e test:
-  - Create an Azure Resource Group, ServiceBus Namespace, and a Topic
+  - Create an Azure Resource Group, ServiceBus Namespace, and a Queue
   - Send an event from the Azure ServiceBus into the TriggerMesh source
 
 */
@@ -64,19 +65,19 @@ var sourceAPIVersion = schema.GroupVersion{
 }
 
 const (
-	sourceKind     = "AzureServiceBusTopicSource"
-	sourceResource = "azureservicebustopicsource"
+	sourceKind     = "AzureServiceBusQueueSource"
+	sourceResource = "azureservicebusqueuesource"
 )
 
 /*
  Basic flow will resemble:
  * Create a resource group to contain our servicebus
  * Ensure our service principal can read/write from the servicebus
- * Instantiate the AzureServiceBusTopicSource
- * Send an event to the AzureServiceBusTopicSource and look for a response
+ * Instantiate the AzureServiceBusQueueSource
+ * Send an event to the AzureServiceBusQueueSource and look for a response
 */
 
-var _ = Describe("Azure ServiceBusTopic", func() {
+var _ = Describe("Azure ServiceBusQueue", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	region := os.Getenv("AZURE_REGION")
@@ -92,8 +93,8 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 	var sink *duckv1.Destination
 
 	var rg armresources.ResourceGroup
-	var topic *sv.TopicEntity
-	var topicSender *sv.Topic
+	var queue *sv.QueueEntity
+	var queueSender *sv.Queue
 
 	BeforeEach(func() {
 		ns = f.UniqueName
@@ -104,14 +105,14 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 		nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
 		err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
 		Expect(err).ToNot(HaveOccurred())
-		topic, topicSender = createTopic(ctx, ns, e2eazure.CreateNsService(ctx, region, ns, nsClient))
+		queue, queueSender = createQueue(ctx, region, ns, nsClient)
 	})
 
-	Context("a source watches a servicebus topic", func() {
+	Context("a source watches a servicebus queue", func() {
 		var err error // stubbed
 
 		When("an event flows", func() {
-			It("should create an azure servicebus topic subscription", func() {
+			It("should create an azure servicebus queue subscription", func() {
 				By("creating an event sink", func() {
 					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 				})
@@ -120,7 +121,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 					src, err = createSource(srcClient, ns, "test-", sink,
 						withServicePrincipal(),
 						withSubscriptionID(subscriptionID),
-						withTopicID(createTopicID(subscriptionID, ns, topic.Name)),
+						withQueueID(createQueueID(subscriptionID, ns, queue.Name)),
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -128,7 +129,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 				})
 
 				By("sending an event", func() {
-					err = topicSender.Send(ctx, sv.NewMessageFromString("hello world"))
+					err = queueSender.Send(ctx, sv.NewMessageFromString("hello world"))
 					Expect(err).ToNot(HaveOccurred())
 				})
 
@@ -163,7 +164,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 
 type sourceOption func(*unstructured.Unstructured)
 
-// createSource creates an AzureServiceBusTopicSource object initialized with the test parameters
+// createSource creates an AzureEventHubSource object initialized with the test parameters
 func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
 	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
 	src := &unstructured.Unstructured{}
@@ -187,10 +188,10 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 // Define the creation parameters to pass along
 
-func withTopicID(id string) sourceOption {
+func withQueueID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, id, "spec", "topicID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.topicID: %s", err)
+		if err := unstructured.SetNestedField(src.Object, id, "spec", "queueID"); err != nil {
+			framework.FailfWithOffset(3, "failed to set spec.queueID: %s", err)
 		}
 	}
 }
@@ -235,26 +236,46 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 	}
 }
 
-// createTopic will create a servicebus topic and topicSender using the given name
-func createTopic(ctx context.Context, name string, ns *sv.Namespace) (*sv.TopicEntity, *sv.Topic) {
-	tm := ns.NewTopicManager()
-
-	topic, err := tm.Put(ctx, name)
+// createQueue will create a servicebus queue and queueSender using the given name
+func createQueue(ctx context.Context, region string, name string, nsCli *servicebus.NamespacesClient) (*sv.QueueEntity, *sv.Queue) {
+	keys, err := nsCli.ListKeys(ctx, name, name, "RootManageSharedAccessKey")
 	if err != nil {
-		framework.FailfWithOffset(3, "error creating topic: %s", err)
+		framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
 		return nil, nil
 	}
 
-	topicSender, err := ns.NewTopic(topic.Name)
-	if err != nil {
-		framework.FailfWithOffset(3, "unable to create the topic sender: %s", err)
+	// Take the namespace connection string, and add the specific servicehub
+	connectionString := *keys.PrimaryConnectionString + ";EntityPath=" + name
+	svNs := sv.NamespaceWithConnectionString(connectionString)
+	if svNs == nil {
+		framework.FailfWithOffset(3, "unable to configure the namespace client: %s", err)
 		return nil, nil
 	}
 
-	return topic, topicSender
+	ns, err := sv.NewNamespace(svNs)
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to create the namespace client: %s", err)
+		return nil, nil
+	}
+
+	tm := ns.NewQueueManager()
+
+	queue, err := tm.Put(ctx, name)
+	if err != nil {
+		framework.FailfWithOffset(3, "error creating queue: %s", err)
+		return nil, nil
+	}
+
+	queueSender, err := ns.NewQueue(queue.Name)
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to create the queue sender: %s", err)
+		return nil, nil
+	}
+
+	return queue, queueSender
 }
 
-// createTopicID will create the topicID path used by the k8s azureservicebustopicsource
-func createTopicID(subscriptionID, name, topicName string) string {
-	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + name + "/providers/Microsoft.ServiceBus/namespaces/" + name + "/topics/" + topicName
+// createQueueID will create the queueID path used by the k8s azureservicebusqueuesource
+func createQueueID(subscriptionID, name, queueName string) string {
+	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + name + "/providers/Microsoft.ServiceBus/namespaces/" + name + "/queues/" + queueName
 }
