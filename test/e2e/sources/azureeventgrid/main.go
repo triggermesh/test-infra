@@ -101,7 +101,7 @@ var _ = Describe("Azure Event Grid", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, true)
+		_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
 	})
 
 	Context("an Azure Event Grid source is created", func() {
@@ -182,7 +182,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withEventHubEndpoint(namespaceID string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, namespaceID, "spec", "endpoint", "eventHubs", "namespaceID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
 		}
 	}
 }
@@ -190,7 +190,7 @@ func withEventHubEndpoint(namespaceID string) sourceOption {
 func withEventTypes(eventTypes []string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedStringSlice(src.Object, eventTypes, "spec", "eventTypes"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.eventTypes: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.eventTypes: %s", err)
 		}
 	}
 }
@@ -198,7 +198,7 @@ func withEventTypes(eventTypes []string) sourceOption {
 func withEventScope(eventScope string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, eventScope, "spec", "scope"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.scope: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.scope: %s", err)
 		}
 	}
 }
@@ -213,7 +213,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }

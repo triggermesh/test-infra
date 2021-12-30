@@ -101,7 +101,7 @@ var _ = Describe("Azure EventHubs", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, false)
+		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
 
 	})
 
@@ -193,7 +193,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withEventHubID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "eventHubID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.eventHubID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.eventHubID: %s", err)
 		}
 	}
 }
@@ -201,7 +201,7 @@ func withEventHubID(id string) sourceOption {
 func withSubscriptionID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "subscriptionID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.subscriptionID: %s", err)
 		}
 	}
 }
@@ -216,7 +216,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }

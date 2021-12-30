@@ -28,10 +28,18 @@ import (
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
-func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region, rg string, omitHub bool) *eventhubs.Hub {
+func CreateEventHubNamespaceOnly(ctx context.Context, subscriptionID, name, region, rg string) *eventhubs.Hub {
+	return CreateEventHubCommon(ctx, subscriptionID, name, region, rg, true)
+}
+
+func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region, rg string) *eventhubs.Hub {
+	return CreateEventHubCommon(ctx, subscriptionID, name, region, rg, false)
+}
+
+func CreateEventHubCommon(ctx context.Context, subscriptionID, name, region, rg string, omitHub bool) *eventhubs.Hub {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(1, "Unable to authenticate: %s", err)
 	}
 
 	nsClient := armeventhub.NewNamespacesClient(subscriptionID, cred, nil)
@@ -54,12 +62,12 @@ func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region,
 	}, nil)
 
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create eventhub namespace: %s", err)
+		framework.FailfWithOffset(1, "Unable to create eventhub namespace: %s", err)
 	}
 
 	_, err = nsResp.PollUntilDone(ctx, time.Second*30)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create eventhub namespace: %s", err)
+		framework.FailfWithOffset(1, "Unable to create eventhub namespace: %s", err)
 	}
 
 	if !omitHub {
@@ -71,13 +79,13 @@ func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region,
 		}, nil)
 
 		if err != nil {
-			framework.FailfWithOffset(3, "unable to create eventhub: %s", err)
+			framework.FailfWithOffset(1, "Unable to create eventhub: %s", err)
 			return nil
 		}
 
 		keys, err := nsClient.ListKeys(ctx, rg, *ehResp.Name, "RootManageSharedAccessKey", nil)
 		if err != nil {
-			framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
+			framework.FailfWithOffset(1, "Unable to obtain the connection string: %s", err)
 			return nil
 		}
 
@@ -85,7 +93,7 @@ func CreateEventHubComponents(ctx context.Context, subscriptionID, name, region,
 		connectionString := *keys.PrimaryConnectionString + ";EntityPath=" + name
 		hub, err := eventhubs.NewHubFromConnectionString(connectionString)
 		if err != nil {
-			framework.FailfWithOffset(3, "unable to create eventhub client: %s", err)
+			framework.FailfWithOffset(1, "Unable to create eventhub client: %s", err)
 			return nil
 		}
 

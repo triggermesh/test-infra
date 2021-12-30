@@ -34,7 +34,7 @@ const E2EInstanceTagKey = "e2e_instance"
 func CreateResourceGroup(ctx context.Context, subscriptionID, name, region string) armresources.ResourceGroup {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(1, "Unable to authenticate: %s", err)
 	}
 
 	rgClient := armresources.NewResourceGroupsClient(subscriptionID, cred, nil)
@@ -45,7 +45,7 @@ func CreateResourceGroup(ctx context.Context, subscriptionID, name, region strin
 	}, nil)
 
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create resource group: %s", err)
+		framework.FailfWithOffset(1, "Unable to create resource group: %s", err)
 	}
 
 	return rg.ResourceGroup
@@ -55,14 +55,14 @@ func CreateResourceGroup(ctx context.Context, subscriptionID, name, region strin
 func DeleteResourceGroup(ctx context.Context, subscriptionID, name string) armresources.ResourceGroupsDeletePollerResponse {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(1, "Unable to authenticate: %s", err)
 	}
 
 	rgClient := armresources.NewResourceGroupsClient(subscriptionID, cred, nil)
 
 	resp, err := rgClient.BeginDelete(ctx, name, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "resource group deletion failed: %s", err)
+		framework.FailfWithOffset(1, "Resource group deletion failed: %s", err)
 	}
 
 	return resp
@@ -72,6 +72,6 @@ func DeleteResourceGroup(ctx context.Context, subscriptionID, name string) armre
 func WaitForFutureDeletion(ctx context.Context, subscriptionID string, future armresources.ResourceGroupsDeletePollerResponse) {
 	_, err := future.PollUntilDone(ctx, time.Second*30)
 	if err != nil {
-		framework.FailfWithOffset(3, "resource group deletion failed: %s", err)
+		framework.FailfWithOffset(1, "Resource group deletion failed: %s", err)
 	}
 }
