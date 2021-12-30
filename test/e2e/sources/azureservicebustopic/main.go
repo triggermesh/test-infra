@@ -163,7 +163,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 
 type sourceOption func(*unstructured.Unstructured)
 
-// createSource creates an AzureEventHubSource object initialized with the test parameters
+// createSource creates an AzureServiceBusTopicSource object initialized with the test parameters
 func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
 	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
 	src := &unstructured.Unstructured{}
