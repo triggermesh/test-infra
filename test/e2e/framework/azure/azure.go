@@ -45,7 +45,7 @@ func CreateResourceGroup(ctx context.Context, subscriptionID, name, region strin
 	}, nil)
 
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to delete resource group: %s", err)
+		framework.FailfWithOffset(3, "unable to create resource group: %s", err)
 	}
 
 	return rg.ResourceGroup
