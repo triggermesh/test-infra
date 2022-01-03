@@ -39,7 +39,7 @@ import (
 func CreateIOTHubComponents(ctx context.Context, subscriptionID, rg, region, name string) (string, string) {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(2, "Unable to authenticate: %s", err)
 	}
 
 	// Create the new iothub
@@ -60,22 +60,22 @@ func CreateIOTHubComponents(ctx context.Context, subscriptionID, rg, region, nam
 		},
 	}, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create iothub: %s", err)
+		framework.FailfWithOffset(2, "Unable to create iothub: %s", err)
 	}
 
 	_, err = hub.PollUntilDone(ctx, time.Second*30)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create iothub: %s", err)
+		framework.FailfWithOffset(2, "Unable to create iothub: %s", err)
 	}
 
 	resp, err := iothubClient.GetKeysForKeyName(ctx, rg, name, "iothubowner", nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to get iothubowner key: %s", err)
+		framework.FailfWithOffset(2, "Unable to get iothubowner key: %s", err)
 	}
 
 	devKey, err := CreateDevice(name, "testdev", *resp.PrimaryKey)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create iothub device: %s", err)
+		framework.FailfWithOffset(2, "Unable to create iothub device: %s", err)
 	}
 
 	return devKey, fmt.Sprintf("HostName=%s.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=%s", name, *resp.PrimaryKey)
