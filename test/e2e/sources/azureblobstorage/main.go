@@ -143,7 +143,7 @@ var _ = Describe("Azure Blob Storage", func() {
 					src, err = createSource(srcClient, ns, "test-", sink,
 						withServicePrincipal(),
 						withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
-						withEventHubEndpoint(createEventhubID(subscriptionID, ns)),
+						withEventHubNamespace(createEventhubID(subscriptionID, ns)),
 						withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
 					)
 
@@ -255,7 +255,7 @@ func withStorageAccountID(id string) sourceOption {
 	}
 }
 
-func withEventHubEndpoint(namespaceID string) sourceOption {
+func withEventHubNamespace(namespaceID string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, namespaceID, "spec", "endpoint", "eventHubs", "namespaceID"); err != nil {
 			framework.FailfWithOffset(2, "Failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
@@ -271,7 +271,7 @@ func withEventTypes(eventTypes []string) sourceOption {
 	}
 }
 
-// withServicePrincipal will create the secret and service principal based on the azure environment variables
+// withServicePrincipal will create the service principal component based on the azure environment variables
 func withServicePrincipal() sourceOption {
 	credsMap := map[string]interface{}{
 		"tenantID":     map[string]interface{}{"value": os.Getenv("AZURE_TENANT_ID")},
@@ -303,7 +303,7 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 	}
 }
 
-// createEventhubID will create the EventHub path used by the k8s
+// createEventhubID will create the EventHub path used by the k8s given the subscriptionID and the test unique name
 func createEventhubID(subscriptionID, testName string) string {
 	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName
 }

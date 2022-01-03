@@ -119,7 +119,7 @@ var _ = Describe("Azure Event Grid", func() {
 						withServicePrincipal(),
 						withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
 						withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
-						withEventHubEndpoint(createEventhubID(subscriptionID, ns)),
+						withEventHubNamespace(createEventhubID(subscriptionID, ns)),
 					)
 
 					Expect(err).ToNot(HaveOccurred())
@@ -179,7 +179,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 // Define the creation parameters to pass along
 
-func withEventHubEndpoint(namespaceID string) sourceOption {
+func withEventHubNamespace(namespaceID string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, namespaceID, "spec", "endpoint", "eventHubs", "namespaceID"); err != nil {
 			framework.FailfWithOffset(2, "Failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
@@ -203,7 +203,7 @@ func withEventScope(eventScope string) sourceOption {
 	}
 }
 
-// withServicePrincipal will create the secret and service principal based on the azure environment variables
+// withServicePrincipal will create the service principal component based on the azure environment variables
 func withServicePrincipal() sourceOption {
 	credsMap := map[string]interface{}{
 		"tenantID":     map[string]interface{}{"value": os.Getenv("AZURE_TENANT_ID")},
@@ -235,7 +235,7 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 	}
 }
 
-// createEventhubID will create the EventHub path used by the k8s
+// createEventhubID will create the EventHub path used by the k8s given the subscriptionID and the test unique name
 func createEventhubID(subscriptionID, testName string) string {
 	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName
 }
