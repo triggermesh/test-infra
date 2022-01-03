@@ -106,22 +106,19 @@ var _ = Describe("Azure IOT Hub Source", func() {
 		var err error // stubbed
 
 		When("an event flows", func() {
+			var src *unstructured.Unstructured
+
+			BeforeEach(func() {
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
+
+				src, err = createSource(srcClient, ns, "test-", sink,
+					withSASToken(iotHubAddress),
+				)
+
+				Expect(err).ToNot(HaveOccurred())
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+			})
 			It("should create an azure iothub source", func() {
-				By("creating an event sink", func() {
-					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-				})
-
-				var src *unstructured.Unstructured
-				By("creating the azureiothubs source", func() {
-					src, err = createSource(srcClient, ns, "test-", sink,
-						withSASToken(iotHubAddress),
-					)
-
-					Expect(err).ToNot(HaveOccurred())
-
-					ducktypes.WaitUntilReady(f.DynamicClient, src)
-				})
-
 				By("creating a message sent from a device", func() {
 					CreateMsg(ns, "testdev", deviceKey)
 				})
