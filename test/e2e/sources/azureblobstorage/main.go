@@ -115,50 +115,43 @@ var _ = Describe("Azure Blob Storage", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, true)
+		_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
 	})
 
 	Context("an Azure Blob is created and deleted ", func() {
 		var err error // stubbed
 
 		When("a blob is created and deleted", func() {
-			It("should create all resources", func() {
-				By("creating an event sink", func() {
-					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-				})
+			var src *unstructured.Unstructured
 
-				By("creating the Azure Storage Account", func() {
-					// storageaccount name must be alphanumeric characters only and 3-24 characters long
-					saName = strings.Replace(ns, "-", "", -1)
-					saName = strings.Replace(saName, "e2eazureblobstoragesource", "tme2etest", -1)
-					sa = createStorageAccount(ctx, subscriptionID, *rg.Name, saName, region)
-				})
+			BeforeEach(func() {
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 
-				By("creating the Azure Storage Container for the Blob", func() {
-					container = createBlobContainer(ctx, *rg.Name, sa, subscriptionID, ns)
-				})
+				// storageaccount name must be alphanumeric characters only and 3-24 characters long
+				saName = strings.Replace(ns, "-", "", -1)
+				saName = strings.Replace(saName, "e2eazureblobstoragesource", "tme2etest", -1)
+				sa = createStorageAccount(ctx, subscriptionID, *rg.Name, saName, region)
 
-				var src *unstructured.Unstructured
-				By("creating the azureblobstorage source", func() {
-					src, err = createSource(srcClient, ns, "test-", sink,
-						withServicePrincipal(),
-						withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
-						withEventHubEndpoint(createEventhubID(subscriptionID, ns)),
-						withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
-					)
+				container = createBlobContainer(ctx, *rg.Name, sa, subscriptionID, ns)
 
-					Expect(err).ToNot(HaveOccurred())
+				src, err = createSource(srcClient, ns, "test-", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
+				)
 
-					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
-				})
+				Expect(err).ToNot(HaveOccurred())
 
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+				time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
+			})
+
+			It("should verify an Azure storage event is sent", func() {
 				By("uploading a blob", func() {
 					uploadBlob(ctx, container, sa, ns, generatePayload(4096))
 					time.Sleep(30 * time.Second) // wait for the blob to be created
-				})
 
-				By("verifying an event was received", func() {
 					const receiveTimeout = 60 * time.Second // it takes events a little longer to flow in from azure
 					const pollInterval = 500 * time.Millisecond
 
@@ -186,9 +179,7 @@ var _ = Describe("Azure Blob Storage", func() {
 				By("deleting a blob", func() {
 					deleteBlob(ctx, container, sa, ns)
 					time.Sleep(60 * time.Second) // wait for the blob to be deleted
-				})
 
-				By("verifying a second event was received", func() {
 					const receiveTimeout = 60 * time.Second // it takes events a little longer to flow in from azure
 					const pollInterval = 500 * time.Millisecond
 
@@ -250,15 +241,15 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withStorageAccountID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "storageAccountID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.storageAccountID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.storageAccountID: %s", err)
 		}
 	}
 }
 
-func withEventHubEndpoint(namespaceID string) sourceOption {
+func withEventHubNamespace(namespaceID string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, namespaceID, "spec", "endpoint", "eventHubs", "namespaceID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
 		}
 	}
 }
@@ -266,12 +257,12 @@ func withEventHubEndpoint(namespaceID string) sourceOption {
 func withEventTypes(eventTypes []string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedStringSlice(src.Object, eventTypes, "spec", "eventTypes"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.eventTypes: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.eventTypes: %s", err)
 		}
 	}
 }
 
-// withServicePrincipal will create the secret and service principal based on the azure environment variables
+// withServicePrincipal will create the service principal component based on the azure environment variables
 func withServicePrincipal() sourceOption {
 	credsMap := map[string]interface{}{
 		"tenantID":     map[string]interface{}{"value": os.Getenv("AZURE_TENANT_ID")},
@@ -281,7 +272,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }
@@ -303,7 +294,7 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 	}
 }
 
-// createEventhubID will create the EventHub path used by the k8s
+// createEventhubID will create the EventHub path used by the k8s given the subscriptionID and the test unique name
 func createEventhubID(subscriptionID, testName string) string {
 	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName
 }

@@ -101,49 +101,46 @@ var _ = Describe("Azure Event Grid", func() {
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
 		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name, true)
+		_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
 	})
 
 	Context("an Azure Event Grid source is created", func() {
 		var err error // stubbed
 
 		When("an event is produced", func() {
-			It("should create all resources", func() {
-				By("creating an event sink", func() {
-					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-				})
+			var src *unstructured.Unstructured
 
-				var src *unstructured.Unstructured
-				By("creating the azureeventgrid source", func() {
-					src, err = createSource(srcClient, ns, "test-", sink,
-						withServicePrincipal(),
-						withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
-						withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
-						withEventHubEndpoint(createEventhubID(subscriptionID, ns)),
-					)
+			BeforeEach(func() {
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 
-					Expect(err).ToNot(HaveOccurred())
+				src, err = createSource(srcClient, ns, "test-", sink,
+					withServicePrincipal(),
+					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+				)
 
-					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
-				})
+				Expect(err).ToNot(HaveOccurred())
 
-				By("verifying an event was received", func() {
-					const receiveTimeout = 30 * time.Second
-					const pollInterval = 500 * time.Millisecond
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+				time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
+			})
 
-					var receivedEvents []cloudevents.Event
+			It("should verify an eventgrid event was sent", func() {
+				const receiveTimeout = 30 * time.Second
+				const pollInterval = 500 * time.Millisecond
 
-					readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
+				var receivedEvents []cloudevents.Event
 
-					Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
-					Expect(receivedEvents).To(HaveLen(1))
+				readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
 
-					e := receivedEvents[0]
+				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+				Expect(receivedEvents).To(HaveLen(1))
 
-					Expect(e.Type()).To(Equal("Microsoft.Resources.ResourceWriteSuccess"))
-					Expect(e.Source()).To(Equal("/subscriptions/" + subscriptionID + "/resourcegroups/" + *rg.Name))
-				})
+				e := receivedEvents[0]
+
+				Expect(e.Type()).To(Equal("Microsoft.Resources.ResourceWriteSuccess"))
+				Expect(e.Source()).To(Equal("/subscriptions/" + subscriptionID + "/resourcegroups/" + *rg.Name))
 			})
 		})
 	})
@@ -179,10 +176,10 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 // Define the creation parameters to pass along
 
-func withEventHubEndpoint(namespaceID string) sourceOption {
+func withEventHubNamespace(namespaceID string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, namespaceID, "spec", "endpoint", "eventHubs", "namespaceID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.endpoint.eventHubs.namespaceID: %s", err)
 		}
 	}
 }
@@ -190,7 +187,7 @@ func withEventHubEndpoint(namespaceID string) sourceOption {
 func withEventTypes(eventTypes []string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedStringSlice(src.Object, eventTypes, "spec", "eventTypes"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.eventTypes: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.eventTypes: %s", err)
 		}
 	}
 }
@@ -198,12 +195,12 @@ func withEventTypes(eventTypes []string) sourceOption {
 func withEventScope(eventScope string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, eventScope, "spec", "scope"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.scope: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.scope: %s", err)
 		}
 	}
 }
 
-// withServicePrincipal will create the secret and service principal based on the azure environment variables
+// withServicePrincipal will create the service principal component based on the azure environment variables
 func withServicePrincipal() sourceOption {
 	credsMap := map[string]interface{}{
 		"tenantID":     map[string]interface{}{"value": os.Getenv("AZURE_TENANT_ID")},
@@ -213,7 +210,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }
@@ -235,7 +232,7 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 	}
 }
 
-// createEventhubID will create the EventHub path used by the k8s
+// createEventhubID will create the EventHub path used by the k8s given the subscriptionID and the test unique name
 func createEventhubID(subscriptionID, testName string) string {
 	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName
 }

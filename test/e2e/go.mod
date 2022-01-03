@@ -13,6 +13,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v0.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v0.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.2.0
+	github.com/Azure/azure-service-bus-go v0.9.1
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/aws/aws-sdk-go v1.34.22
@@ -24,7 +25,6 @@ require (
 	github.com/slack-go/slack v0.9.3
 	github.com/xanzy/go-gitlab v0.32.0
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	golang.org/x/sys v0.0.0-20210629170331-7dc0b73dc9fb // indirect
 	golang.org/x/tools v0.1.4 // indirect
 	google.golang.org/api v0.29.0
 	k8s.io/api v0.18.8

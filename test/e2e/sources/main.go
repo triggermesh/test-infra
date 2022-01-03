@@ -28,6 +28,8 @@ import (
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureeventgrid"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureeventhubs"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureiothub"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureservicebusqueue"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureservicebustopic"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudauditlogs"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudpubsub"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/googlecloudrepositories"

@@ -14,21 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package azureactivitylog
+package azureservicebusqueue
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/servicebus/mgmt/servicebus"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	sv "github.com/Azure/azure-service-bus-go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/triggermesh/test-infra/test/e2e/framework/azure"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
+	e2eazure "github.com/triggermesh/test-infra/test/e2e/framework/azure"
 	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
 	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,18 +45,17 @@ import (
 
 /*
   This test requires:
-  - Azure Service Principal Credentials with the Azure Event Hubs Data Owner role assigned at the subscription level
+  - Azure Service Principal Credentials with the Azure ServiceBus Data Owner role assigned at the subscription level
 
   The following environment variables _MUST_ be set:
   - AZURE_SUBSCRIPTION_ID - Common subscription for the test to run against
   - AZURE_TENANT_ID - Azure tenant to create the resources against
   - AZURE_CLIENT_ID - The Azure ServicePrincipal Client ID
   - AZURE_CLIENT_SECRET - The Azure ServicePrincipal Client Secret
-  - AZURE_REGION - Define the Azure region to run the test (default uswest2)
 
   These will be done by the e2e test:
-  - Create an Azure Resource Group, EventHubs Namespace, and EventHub
-  - Send an event from the Azure EventHub into the TriggerMesh source
+  - Create an Azure Resource Group, ServiceBus Namespace, and a Queue
+  - Send an event from the Azure ServiceBus into the TriggerMesh source
 
 */
 
@@ -62,19 +65,19 @@ var sourceAPIVersion = schema.GroupVersion{
 }
 
 const (
-	sourceKind     = "AzureActivityLogsSource"
-	sourceResource = "azureactivitylogssource"
+	sourceKind     = "AzureServiceBusQueueSource"
+	sourceResource = "azureservicebusqueuesource"
 )
 
 /*
  Basic flow will resemble:
- * Create a resource group to contain our eventhub
- * Ensure our service principal can read/write from the eventhub
- * Instantiate the AzureActivityLogsSource
- * Create a resource group and watch the event flow in
+ * Create a resource group to contain our servicebus
+ * Ensure our service principal can read/write from the servicebus
+ * Instantiate the AzureServiceBusQueueSource
+ * Send an event to the AzureServiceBusQueueSource and look for a response
 */
 
-var _ = Describe("Azure Activity Logs", func() {
+var _ = Describe("Azure ServiceBusQueue", func() {
 	ctx := context.Background()
 	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	region := os.Getenv("AZURE_REGION")
@@ -90,51 +93,48 @@ var _ = Describe("Azure Activity Logs", func() {
 	var sink *duckv1.Destination
 
 	var rg armresources.ResourceGroup
+	var queue *sv.QueueEntity
+	var queueSender *sv.Queue
 
 	BeforeEach(func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
-		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
-
+		rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+		nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
+		err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
+		Expect(err).ToNot(HaveOccurred())
+		queue, queueSender = createQueue(ctx, region, ns, nsClient)
 	})
 
-	Context("a source watches an EventHub publishing Activity Log data", func() {
+	Context("a source watches a servicebus queue", func() {
 		var err error // stubbed
-		var testRG armresources.ResourceGroup
 
 		When("an event flows", func() {
-			It("should create an azure eventhub", func() {
+			It("should create an azure servicebus queue subscription", func() {
 				By("creating an event sink", func() {
 					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 				})
-
-				By("creating a sample resource group to produce activity", func() {
-					testRG = azure.CreateResourceGroup(ctx, subscriptionID, *rg.Name+"-testrg", region)
-				})
-
 				var src *unstructured.Unstructured
-				By("creating the azureactivitylog source", func() {
+				By("creating the azureservicebussource", func() {
 					src, err = createSource(srcClient, ns, "test-", sink,
 						withServicePrincipal(),
 						withSubscriptionID(subscriptionID),
-						withActivityCategories([]string{"Administrative", "Policy", "Security"}),
-						withEventHubNS(createEventHubNS(subscriptionID, ns)),
-						withEventHubName(ns),
+						withQueueID(createQueueID(subscriptionID, ns, queue.Name)),
 					)
-
 					Expect(err).ToNot(HaveOccurred())
 
 					ducktypes.WaitUntilReady(f.DynamicClient, src)
 				})
 
-				By("verifying the event was sent by deleting a resource", func() {
-					deleteFuture := azure.DeleteResourceGroup(ctx, subscriptionID, *testRG.Name)
-					azure.WaitForFutureDeletion(ctx, subscriptionID, deleteFuture)
+				By("sending an event", func() {
+					err = queueSender.Send(ctx, sv.NewMessageFromString("hello world"))
+					Expect(err).ToNot(HaveOccurred())
+				})
 
-					const receiveTimeout = 900 * time.Second // It can take up to 15 minutes for an event to appear
+				By("verifying the event was sent", func() {
+					const receiveTimeout = 25 * time.Second // It needs some more time than our default 15s.
 					const pollInterval = 500 * time.Millisecond
 
 					var receivedEvents []cloudevents.Event
@@ -142,14 +142,23 @@ var _ = Describe("Azure Activity Logs", func() {
 					readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
 
 					Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
-					Expect(receivedEvents).ToNot(BeEmpty()) // In some cases will receive either 1 or 2 events
+					Expect(receivedEvents).To(HaveLen(1))
+
+					e := receivedEvents[0]
+
+					Expect(e.Type()).To(Equal("com.microsoft.azure.servicebus.message"))
+
+					data := make(map[string]interface{})
+					err = json.Unmarshal(e.Data(), &data)
+					testID := fmt.Sprintf("%v", data["ID"])
+					Expect(data["ID"]).To(Equal(testID))
 				})
 			})
 		})
 	})
 
 	AfterEach(func() {
-		_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+		_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
 	})
 })
 
@@ -179,32 +188,10 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 
 // Define the creation parameters to pass along
 
-func withEventHubNS(ns string) sourceOption {
+func withQueueID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, ns, "spec", "destination", "eventHubs", "namespaceID"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set spec.destination.eventHubs.namespaceID: %s", err)
-		}
-	}
-}
-
-func withEventHubName(name string) sourceOption {
-	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedField(src.Object, name, "spec", "destination", "eventHubs", "hubName"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set spec.destination.eventHubs.hubName: %s", err)
-		}
-	}
-}
-
-func withActivityCategories(categories []string) sourceOption {
-	// The make slice and for loop is to ensure the string array gets converted to an interface array
-	iarray := make([]interface{}, len(categories))
-	for i := range categories {
-		iarray[i] = categories[i]
-	}
-
-	return func(src *unstructured.Unstructured) {
-		if err := unstructured.SetNestedSlice(src.Object, iarray, "spec", "categories"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set spec.eventHubID: %s", err)
+		if err := unstructured.SetNestedField(src.Object, id, "spec", "queueID"); err != nil {
+			framework.FailfWithOffset(3, "failed to set spec.queueID: %s", err)
 		}
 	}
 }
@@ -212,7 +199,7 @@ func withActivityCategories(categories []string) sourceOption {
 func withSubscriptionID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "subscriptionID"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
 		}
 	}
 }
@@ -227,7 +214,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }
@@ -249,7 +236,46 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 	}
 }
 
-// createEventhubID will create the EventHub path used by the k8s azureeventhubssource
-func createEventHubNS(subscriptionID, testName string) string {
-	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + testName + "/providers/Microsoft.EventHub/namespaces/" + testName
+// createQueue will create a servicebus queue and queueSender using the given name
+func createQueue(ctx context.Context, region string, name string, nsCli *servicebus.NamespacesClient) (*sv.QueueEntity, *sv.Queue) {
+	keys, err := nsCli.ListKeys(ctx, name, name, "RootManageSharedAccessKey")
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
+		return nil, nil
+	}
+
+	// Take the namespace connection string, and add the specific servicehub
+	connectionString := *keys.PrimaryConnectionString + ";EntityPath=" + name
+	svNs := sv.NamespaceWithConnectionString(connectionString)
+	if svNs == nil {
+		framework.FailfWithOffset(3, "unable to configure the namespace client: %s", err)
+		return nil, nil
+	}
+
+	ns, err := sv.NewNamespace(svNs)
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to create the namespace client: %s", err)
+		return nil, nil
+	}
+
+	tm := ns.NewQueueManager()
+
+	queue, err := tm.Put(ctx, name)
+	if err != nil {
+		framework.FailfWithOffset(3, "error creating queue: %s", err)
+		return nil, nil
+	}
+
+	queueSender, err := ns.NewQueue(queue.Name)
+	if err != nil {
+		framework.FailfWithOffset(3, "unable to create the queue sender: %s", err)
+		return nil, nil
+	}
+
+	return queue, queueSender
+}
+
+// createQueueID will create the queueID path used by the k8s azureservicebusqueuesource
+func createQueueID(subscriptionID, name, queueName string) string {
+	return "/subscriptions/" + subscriptionID + "/resourceGroups/" + name + "/providers/Microsoft.ServiceBus/namespaces/" + name + "/queues/" + queueName
 }
