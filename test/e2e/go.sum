@@ -104,6 +104,8 @@ github.com/Azure/azure-sdk-for-go/sdk/internal v0.8.1 h1:BUYIbDf/mMZ8945v3QkG3Ou
 github.com/Azure/azure-sdk-for-go/sdk/internal v0.8.1/go.mod h1:KLF4gFr6DcKFZwSuH8w8yEK6DpFl3LP5rhdvAb7Yz5I=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub v0.2.0 h1:gTM3e6aKY3HCS0tFtyHn6ecnHTS3NfjQIR+HzndGF90=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub v0.2.0/go.mod h1:qljPRRfqBnn7Unxo2h1e1GjmRhjoxAcvaPlfUkecBfs=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/iothub/armiothub v0.2.0 h1:ooZhD60mBebBXwwzrvxhXF4I6BCCgHqORYz5OOXdbaA=
+github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/iothub/armiothub v0.2.0/go.mod h1:JJZCWIWocRyx6DdAKzb3RP7lh/nlcro14pHWv7naALo=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v0.2.0 h1:SdyLrG1OreJ3X8CoPgQnKU847+61sJ9TVfvtrdjX6rI=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v0.2.0/go.mod h1:aSuRFfpDntiZkIh+XmoL9EV4FS4ViptLBwFRytECG/8=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v0.2.0 h1:CGIYpRDCMotOj1a/1OZOPAwKq0xFKV+/8lHo9GB6Lw4=
