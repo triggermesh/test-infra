@@ -108,42 +108,39 @@ var _ = Describe("Azure Event Grid", func() {
 		var err error // stubbed
 
 		When("an event is produced", func() {
-			It("should create all resources", func() {
-				By("creating an event sink", func() {
-					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-				})
+			var src *unstructured.Unstructured
 
-				var src *unstructured.Unstructured
-				By("creating the azureeventgrid source", func() {
-					src, err = createSource(srcClient, ns, "test-", sink,
-						withServicePrincipal(),
-						withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
-						withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
-						withEventHubNamespace(createEventhubID(subscriptionID, ns)),
-					)
+			BeforeEach(func() {
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
 
-					Expect(err).ToNot(HaveOccurred())
+				src, err = createSource(srcClient, ns, "test-", sink,
+					withServicePrincipal(),
+					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+				)
 
-					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
-				})
+				Expect(err).ToNot(HaveOccurred())
 
-				By("verifying an event was received", func() {
-					const receiveTimeout = 30 * time.Second
-					const pollInterval = 500 * time.Millisecond
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+				time.Sleep(30 * time.Second) // Will take some extra time to bring up the Azure Eventgrid
+			})
 
-					var receivedEvents []cloudevents.Event
+			It("should verify an eventgrid event was sent", func() {
+				const receiveTimeout = 30 * time.Second
+				const pollInterval = 500 * time.Millisecond
 
-					readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
+				var receivedEvents []cloudevents.Event
 
-					Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
-					Expect(receivedEvents).To(HaveLen(1))
+				readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
 
-					e := receivedEvents[0]
+				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+				Expect(receivedEvents).To(HaveLen(1))
 
-					Expect(e.Type()).To(Equal("Microsoft.Resources.ResourceWriteSuccess"))
-					Expect(e.Source()).To(Equal("/subscriptions/" + subscriptionID + "/resourcegroups/" + *rg.Name))
-				})
+				e := receivedEvents[0]
+
+				Expect(e.Type()).To(Equal("Microsoft.Resources.ResourceWriteSuccess"))
+				Expect(e.Source()).To(Equal("/subscriptions/" + subscriptionID + "/resourcegroups/" + *rg.Name))
 			})
 		})
 	})
