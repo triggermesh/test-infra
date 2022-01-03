@@ -5,12 +5,14 @@ go 1.15
 require (
 	cloud.google.com/go/pubsub v1.6.1
 	cloud.google.com/go/storage v1.10.0
-	github.com/Azure/azure-event-hubs-go v1.3.1
+	github.com/Azure/azure-event-hubs-go/v3 v3.3.17
 	github.com/Azure/azure-sdk-for-go v59.0.0+incompatible
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.12.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.12.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub v0.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v0.2.0
-	github.com/Azure/azure-service-bus-go v0.11.5
-	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v0.2.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.2.0
+	github.com/Azure/azure-service-bus-go v0.9.1
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/aws/aws-sdk-go v1.34.22

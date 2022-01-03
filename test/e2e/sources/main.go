@@ -24,6 +24,8 @@ import (
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssns"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/awssqs"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureactivitylog"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureblobstorage"
+	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureeventgrid"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureeventhubs"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureservicebusqueue"
 	_ "github.com/triggermesh/test-infra/test/e2e/sources/azureservicebustopic"

@@ -18,9 +18,10 @@ package azure
 
 import (
 	"context"
+	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
@@ -30,56 +31,47 @@ import (
 const E2EInstanceTagKey = "e2e_instance"
 
 // CreateResourceGroup will create the resource group containing all of the eventhub components.
-func CreateResourceGroup(ctx context.Context, subscriptionID, name, region string) resources.Group {
-	rgClient := resources.NewGroupsClient(subscriptionID)
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
+func CreateResourceGroup(ctx context.Context, subscriptionID, name, region string) armresources.ResourceGroup {
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create authorizer: %s", err)
-		return resources.Group{}
+		framework.FailfWithOffset(1, "Unable to authenticate: %s", err)
 	}
 
-	rgClient.Authorizer = authorizer
+	rgClient := armresources.NewResourceGroupsClient(subscriptionID, cred, nil)
 
-	rg, err := rgClient.CreateOrUpdate(ctx, name, resources.Group{
+	rg, err := rgClient.CreateOrUpdate(ctx, name, armresources.ResourceGroup{
 		Location: to.StringPtr(region),
 		Tags:     map[string]*string{E2EInstanceTagKey: to.StringPtr(name)},
-	})
+	}, nil)
 
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create resource group: %s", err)
-		return resources.Group{}
+		framework.FailfWithOffset(1, "Unable to create resource group: %s", err)
 	}
 
-	return rg
+	return rg.ResourceGroup
 }
 
 // DeleteResourceGroup will delete everything under it allowing for easy cleanup
-func DeleteResourceGroup(ctx context.Context, subscriptionID, name string) resources.GroupsDeleteFuture {
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
+func DeleteResourceGroup(ctx context.Context, subscriptionID, name string) armresources.ResourceGroupsDeletePollerResponse {
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to delete resource group: %s", err)
-		return resources.GroupsDeleteFuture{}
+		framework.FailfWithOffset(1, "Unable to authenticate: %s", err)
 	}
 
-	rgClient := resources.NewGroupsClient(subscriptionID)
-	rgClient.Authorizer = authorizer
+	rgClient := armresources.NewResourceGroupsClient(subscriptionID, cred, nil)
 
-	rgf, err := rgClient.Delete(ctx, name)
+	resp, err := rgClient.BeginDelete(ctx, name, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "resource group deletion failed: %s", err)
+		framework.FailfWithOffset(1, "Resource group deletion failed: %s", err)
 	}
 
-	return rgf
+	return resp
 }
 
 // WaitForFutureDeletion will wait on the resource to be deleted before continuing
-func WaitForFutureDeletion(ctx context.Context, subscriptionID string, future resources.GroupsDeleteFuture) {
-	authorizer, _ := auth.NewAuthorizerFromEnvironment()
-	rgClient := resources.NewGroupsClient(subscriptionID)
-	rgClient.Authorizer = authorizer
-
-	err := future.WaitForCompletionRef(ctx, rgClient.Client)
+func WaitForFutureDeletion(ctx context.Context, subscriptionID string, future armresources.ResourceGroupsDeletePollerResponse) {
+	_, err := future.PollUntilDone(ctx, time.Second*30)
 	if err != nil {
-		framework.FailfWithOffset(3, "resource group deletion failed: %s", err)
+		framework.FailfWithOffset(1, "Resource group deletion failed: %s", err)
 	}
 }
