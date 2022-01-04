@@ -160,7 +160,7 @@ var _ = Describe("Azure Queue Storage", func() {
 			keys, err := e2eazure.GetStorageAccountKey(ctx, storageClient, accountName, *rg.Name)
 			Expect(err).ToNot(HaveOccurred())
 
-			accountKey = *(*keys.Keys)[0].Value
+			accountKey = *(keys.Keys)[0].Value
 
 			By("creating an event sink", func() {
 				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)

@@ -20,54 +20,49 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"time"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/storage/mgmt/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-storage-queue-go/azqueue"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/triggermesh/test-infra/test/e2e/framework"
 )
 
 // CreateStorageAccountsClient will create the storage account client
-func CreateStorageAccountsClient(subscriptionID string) *storage.AccountsClient {
-	storageAccountsClient := storage.NewAccountsClient(subscriptionID)
-
-	auth, err := auth.NewAuthorizerFromEnvironment()
+func CreateStorageAccountsClient(subscriptionID string) *armstorage.StorageAccountsClient {
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create authorizer: %s", err)
-		return nil
+		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
 	}
 
-	storageAccountsClient.Authorizer = auth
+	saClient := armstorage.NewStorageAccountsClient(subscriptionID, cred, nil)
 
-	return &storageAccountsClient
+	return saClient
 }
 
 // CreateStorageAccount will create the storage account
-func CreateStorageAccount(ctx context.Context, cli *storage.AccountsClient, name, rgName, region string) error {
-	future, err := cli.Create(ctx, rgName, name, storage.AccountCreateParameters{
-		Sku: &storage.Sku{
-			Name: storage.SkuNameStandardLRS,
+func CreateStorageAccount(ctx context.Context, cli *armstorage.StorageAccountsClient, name, rgName, region string) error {
+	resp, err := cli.BeginCreate(ctx, rgName, name, armstorage.StorageAccountCreateParameters{
+		Kind:     armstorage.KindStorage.ToPtr(),
+		Location: &region,
+		SKU: &armstorage.SKU{
+			Name: armstorage.SKUNameStandardRAGRS.ToPtr(),
+			Tier: armstorage.SKUTierStandard.ToPtr(),
 		},
-		Kind:                              storage.KindStorage,
-		Location:                          to.StringPtr(region),
-		AccountPropertiesCreateParameters: &storage.AccountPropertiesCreateParameters{},
-	})
+		Identity: &armstorage.Identity{
+			Type: armstorage.IdentityTypeNone.ToPtr(),
+		},
+		Properties: &armstorage.StorageAccountPropertiesCreateParameters{},
+	}, nil)
 
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to create storage account: %s", err)
 		return err
 	}
 
-	err = future.WaitForCompletionRef(ctx, cli.Client)
+	_, err = resp.PollUntilDone(ctx, time.Second*30)
 	if err != nil {
 		framework.FailfWithOffset(3, "unable to complete storage account creation: %s", err)
-		return err
-	}
-
-	_, err = future.Result(*cli)
-	if err != nil {
-		framework.FailfWithOffset(3, "storage account creation failed: %s", err)
 		return err
 	}
 
@@ -105,6 +100,7 @@ func CreateQueueStorage(ctx context.Context, name, accountName string, accountKe
 }
 
 // GetStorageAccountKey will return the storage account keys
-func GetStorageAccountKey(ctx context.Context, cli *storage.AccountsClient, name, rgName string) (storage.AccountListKeysResult, error) {
-	return cli.ListKeys(ctx, rgName, name, storage.ListKeyExpandKerb)
+func GetStorageAccountKey(ctx context.Context, cli *armstorage.StorageAccountsClient, name, rgName string) (armstorage.StorageAccountsListKeysResponse, error) {
+	return cli.ListKeys(ctx, rgName, name, &armstorage.StorageAccountsListKeysOptions{})
+
 }
