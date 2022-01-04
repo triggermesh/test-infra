@@ -24,28 +24,32 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"github.com/Azure/azure-storage-queue-go/azqueue"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	cloudevents "github.com/cloudevents/sdk-go/v2"
-	"github.com/triggermesh/test-infra/test/e2e/framework"
-	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
-	e2eazure "github.com/triggermesh/test-infra/test/e2e/framework/azure"
-	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
-	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	clientset "k8s.io/client-go/kubernetes"
+
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/Azure/azure-storage-queue-go/azqueue"
+
+	cloudevents "github.com/cloudevents/sdk-go/v2"
+
+	"github.com/triggermesh/test-infra/test/e2e/framework"
+	"github.com/triggermesh/test-infra/test/e2e/framework/apps"
+	e2eazure "github.com/triggermesh/test-infra/test/e2e/framework/azure"
+	"github.com/triggermesh/test-infra/test/e2e/framework/bridges"
+	"github.com/triggermesh/test-infra/test/e2e/framework/ducktypes"
 )
 
 /*
   This test requires:
-  - Azure Service Principal Credentials with the Azure Storage Account role and Azure Storage Queue assigned at the subscription level
+  - Azure Service Principal Credentials with the Azure Storage Account role and Azure Queue Storage assigned at the subscription level
 
   The following environment variables _MUST_ be set:
   - AZURE_SUBSCRIPTION_ID - Common subscription for the test to run against
@@ -55,8 +59,8 @@ import (
   - AZURE_REGION - Define the Azure region to run the test (default uswest2)
 
   These will be done by the e2e test:
-  - Create an Azure Resource Group, Storage Account and Storage Queue
-  - Send a message from the Azure Storage Queue into the TriggerMesh source
+  - Create an Azure Resource Group, Storage Account and a Queue Storage
+  - Send a message from the Azure Queue Storage into the TriggerMesh source
 
 */
 
@@ -73,9 +77,9 @@ const (
 /*
  Basic flow will resemble:
  * Create a resource group to contain our storage account
- * Create an azure storage queue.
+ * Create an azure queue storage.
  * Instantiate the AzureQueueStorageSource
- * Send a message to the AzureQueueStorageSource and look for a response
+ * Send a message to the azure queue storage and look for a response
 */
 
 var _ = Describe("Azure Queue Storage", func() {
@@ -93,60 +97,30 @@ var _ = Describe("Azure Queue Storage", func() {
 	var srcClient dynamic.ResourceInterface
 	var sink *duckv1.Destination
 
-	var rg armresources.ResourceGroup
-	var queueMessage *azqueue.MessagesURL
-
-	var accountName string
-	var accountKey string
-
 	BeforeEach(func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		// storageaccount name must be alphanumeric characters only and 3-24 characters long
-		accountName = strings.Replace(ns, "-", "", -1)
-		accountName = strings.Replace(accountName, "e2eazurequeuestoragesource", "tme2etest", -1)
-
-		rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		storageClient := e2eazure.CreateStorageAccountsClient(subscriptionID)
-		err := e2eazure.CreateStorageAccount(ctx, storageClient, accountName, *rg.Name, region)
-		Expect(err).ToNot(HaveOccurred())
-
-		keys, err := e2eazure.GetStorageAccountKey(ctx, storageClient, accountName, *rg.Name)
-		Expect(err).ToNot(HaveOccurred())
-
-		accountKey = *(*keys.Keys)[0].Value
-
-		queueMessage = e2eazure.CreateQueueStorage(ctx, ns, accountName, accountKey)
 	})
 
 	Context("a source watches a servicebus queue", func() {
-		var err error // stubbed
+		var rg armresources.ResourceGroup
+		var queueMessage *azqueue.MessagesURL
 
-		When("an event flows", func() {
-			It("should create an azure servicebus queue subscription", func() {
-				By("creating an event sink", func() {
-					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-				})
-				var src *unstructured.Unstructured
-				By("creating the azureservicebussource", func() {
-					src, err = createSource(srcClient, ns, "test-", sink,
-						withAccountName(accountName),
-						withQueueName(ns),
-						withAccountKey(accountKey),
-					)
-					Expect(err).ToNot(HaveOccurred())
+		var accountName string
+		var accountKey string
 
-					ducktypes.WaitUntilReady(f.DynamicClient, src)
-				})
+		var err error
 
-				By("sending an event", func() {
+		SendMessageAndAssertReceivedEvent := func() func() {
+			return func() {
+
+				BeforeEach(func() {
 					_, err = queueMessage.Enqueue(ctx, "hello world", 0, 0)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
-				By("verifying the event was sent", func() {
+				Specify("the source generates an event", func() {
 					const receiveTimeout = 25 * time.Second
 					const pollInterval = 500 * time.Millisecond
 
@@ -169,12 +143,54 @@ var _ = Describe("Azure Queue Storage", func() {
 					testID := fmt.Sprintf("%v", data["ID"])
 					Expect(data["ID"]).To(Equal(testID))
 				})
+			}
+		}
+
+		BeforeEach(func() {
+			// storageaccount name must be alphanumeric characters only and 3-24 characters long
+			accountName = strings.Replace(ns, "-", "", -1)
+			accountName = strings.Replace(accountName, "e2eazurequeuestoragesource", "tme2etest", -1)
+
+			rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+			storageClient := e2eazure.CreateStorageAccountsClient(subscriptionID)
+
+			err := e2eazure.CreateStorageAccount(ctx, storageClient, accountName, *rg.Name, region)
+			Expect(err).ToNot(HaveOccurred())
+
+			keys, err := e2eazure.GetStorageAccountKey(ctx, storageClient, accountName, *rg.Name)
+			Expect(err).ToNot(HaveOccurred())
+
+			accountKey = *(*keys.Keys)[0].Value
+
+			By("creating an event sink", func() {
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
+			})
+			By("creating a queue storage", func() {
+				queueMessage = e2eazure.CreateQueueStorage(ctx, ns, accountName, accountKey)
 			})
 		})
-	})
 
-	AfterEach(func() {
-		_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+		AfterEach(func() {
+			_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+		})
+
+		Context("the subscription is managed by the source", func() {
+			BeforeEach(func() {
+				By("creating the AzureQueueStorageSource object", func() {
+					src, err := createSource(srcClient, ns, "test-", sink,
+						withAccountName(accountName),
+						withQueueName(ns),
+						withAccountKey(accountKey),
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					ducktypes.WaitUntilReady(f.DynamicClient, src)
+				})
+			})
+
+			When("a message is sent to the queue storage", SendMessageAndAssertReceivedEvent())
+
+		})
 	})
 })
 

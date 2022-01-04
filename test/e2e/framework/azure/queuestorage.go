@@ -92,17 +92,12 @@ func CreateQueueStorage(ctx context.Context, name, accountName string, accountKe
 	serviceURL := azqueue.NewServiceURL(*urlRef, p)
 
 	// Create a Queue
-	// Create a URL that references a queue in your Azure Storage account.
-	// This returns a QueueURL object that wraps the queue's URL and a request pipeline (inherited from serviceURL)
-	_, err = serviceURL.NewQueueURL(name).Create(ctx, azqueue.Metadata{}) // Queue names require lowercase
+	_, err = serviceURL.NewQueueURL(name).Create(ctx, azqueue.Metadata{})
 	if err != nil {
 		framework.FailfWithOffset(3, "error creating queue: ", err)
 	}
-	// Create a URL allowing you to manipulate a queue's messages.
-	// This returns a MessagesURL object that wraps the queue's messages URL and a request pipeline (inherited from queueURL)
 
 	queueURL := serviceURL.NewQueueURL(name)
-
 	messagesURL := queueURL.NewMessagesURL()
 
 	return &messagesURL
