@@ -9,6 +9,7 @@ require (
 	github.com/Azure/azure-sdk-for-go v59.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub v0.2.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/iothub/armiothub v0.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v0.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v0.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.2.0
