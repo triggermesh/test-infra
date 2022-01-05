@@ -91,22 +91,6 @@ func QueueARN(sqsClient sqsiface.SQSAPI, url string) string /*arn*/ {
 	return *resp.Attributes[sqs.QueueAttributeNameQueueArn]
 }
 
-// SendMessage sends a message to the queue with the given URL.
-func SendMessage(sqsClient sqsiface.SQSAPI, url string) string /*msgId*/ {
-	msg := "hello, world!"
-
-	params := &sqs.SendMessageInput{
-		QueueUrl:    &url,
-		MessageBody: &msg,
-	}
-
-	msgOutput, err := sqsClient.SendMessage(params)
-	if err != nil {
-		framework.FailfWithOffset(2, "Failed to send message to queue %q: %s", *params.QueueUrl, err)
-	}
-	return *msgOutput.MessageId
-}
-
 // ReceiveMessages retrieves messages from the queue with the given URL.
 func ReceiveMessages(sqsClient sqsiface.SQSAPI, url string) []*sqs.Message {
 	const maxRcvMsg int64 = 10
