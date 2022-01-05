@@ -99,68 +99,109 @@ var _ = Describe("Azure EventHubs", func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
-
 	})
 
 	Context("a source watches an EventHub", func() {
 		var err error // stubbed
 
 		When("an event flows", func() {
+			BeforeEach(func() {
+				rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+				hub = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
+
+				sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
+			})
+
 			It("should create an azure eventhub", func() {
-				By("creating an event sink", func() {
-					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
-				})
-
 				var src *unstructured.Unstructured
-				By("creating the azureeventhubsource", func() {
-					src, err = createSource(srcClient, ns, "test-", sink,
-						withServicePrincipal(),
-						withSubscriptionID(subscriptionID),
-						withEventHubID(createEventhubID(subscriptionID, ns)),
-					)
 
-					Expect(err).ToNot(HaveOccurred())
+				src, err = createSource(srcClient, ns, "test-", sink,
+					withServicePrincipal(),
+					withSubscriptionID(subscriptionID),
+					withEventHubID(createEventhubID(subscriptionID, ns)),
+				)
 
-					ducktypes.WaitUntilReady(f.DynamicClient, src)
-					time.Sleep(5 * time.Second)
-				})
+				Expect(err).ToNot(HaveOccurred())
 
-				By("sending an event", func() {
-					ev := eventhubs.NewEvent([]byte("hello world"))
-					err = hub.Send(ctx, ev, eventhubs.SendWithMessageID("12345"))
-					Expect(err).ToNot(HaveOccurred())
-				})
+				ducktypes.WaitUntilReady(f.DynamicClient, src)
+				time.Sleep(5 * time.Second)
 
-				By("verifying the event was sent", func() {
-					const receiveTimeout = 15 * time.Second // it takes events a little longer to flow in from azure
-					const pollInterval = 500 * time.Millisecond
+				ev := eventhubs.NewEvent([]byte("hello world"))
+				err = hub.Send(ctx, ev, eventhubs.SendWithMessageID("12345"))
+				Expect(err).ToNot(HaveOccurred())
 
-					var receivedEvents []cloudevents.Event
+				const receiveTimeout = 15 * time.Second // it takes events a little longer to flow in from azure
+				const pollInterval = 500 * time.Millisecond
 
-					readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
+				var receivedEvents []cloudevents.Event
 
-					Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
-					Expect(receivedEvents).To(HaveLen(1))
+				readReceivedEvents := readReceivedEvents(f.KubeClient, ns, sink.Ref.Name, &receivedEvents)
 
-					e := receivedEvents[0]
+				Eventually(readReceivedEvents, receiveTimeout, pollInterval).ShouldNot(BeEmpty())
+				Expect(receivedEvents).To(HaveLen(1))
 
-					Expect(e.Type()).To(Equal("com.microsoft.azure.eventhub.message"))
-					Expect(e.Source()).To(Equal(createEventhubID(subscriptionID, ns)))
+				e := receivedEvents[0]
 
-					data := make(map[string]interface{})
-					err = json.Unmarshal(e.Data(), &data)
-					testID := fmt.Sprintf("%v", data["ID"])
-					Expect(data["ID"]).To(Equal(testID))
-				})
+				Expect(e.Type()).To(Equal("com.microsoft.azure.eventhub.message"))
+				Expect(e.Source()).To(Equal(createEventhubID(subscriptionID, ns)))
+
+				data := make(map[string]interface{})
+				err = json.Unmarshal(e.Data(), &data)
+				testID := fmt.Sprintf("%v", data["ID"])
+				Expect(data["ID"]).To(Equal(testID))
+			})
+
+			AfterEach(func() {
+				_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
 			})
 		})
 	})
 
-	AfterEach(func() {
-		_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+
+			By("setting empty credentials", func() {
+				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
+					withSubscriptionID(subscriptionID),
+					withEventHubID(createEventhubID(subscriptionID, ns)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+
+			By("setting no eventHubID", func() {
+				_, err := createSource(srcClient, ns, "test-missing-eventHubID", sink,
+					withServicePrincipal(),
+					withSubscriptionID(subscriptionID),
+				)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.eventHubID: Required value`))
+			})
+
+			By("setting invalid eventHubID", func() {
+				fakeSubID := "I'm a fake subscription"
+				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
+					withServicePrincipal(),
+					withSubscriptionID(subscriptionID),
+					withEventHubID(createEventhubID(fakeSubID, ns)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.eventHubID: Invalid value: "`))
+			})
+		})
 	})
 })
 

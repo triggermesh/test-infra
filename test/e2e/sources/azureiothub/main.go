@@ -96,16 +96,17 @@ var _ = Describe("Azure IOT Hub Source", func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-
-		deviceKey, iotHubAddress = azure.CreateIOTHubComponents(ctx, subscriptionID, *rg.Name, region, ns)
 	})
 
 	Context("a source watches an IOTHub for a device message", func() {
 		var err error // stubbed
 
 		When("an event flows", func() {
+			BeforeEach(func() {
+				rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+				deviceKey, iotHubAddress = azure.CreateIOTHubComponents(ctx, subscriptionID, *rg.Name, region, ns)
+			})
+
 			var src *unstructured.Unstructured
 
 			BeforeEach(func() {
@@ -150,11 +151,32 @@ var _ = Describe("Azure IOT Hub Source", func() {
 					Expect(testData["data"]).To(Equal("a test payload"))
 				})
 			})
+			AfterEach(func() {
+				_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+			})
 		})
 	})
 
-	AfterEach(func() {
-		_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+			By("setting empty credentials", func() {
+				_, err := createSource(srcClient, ns, "test-empty-credentials", sink)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+		})
 	})
 })
 
@@ -188,7 +210,23 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withSASToken(sasToken string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, sasToken, "spec", "auth", "sasToken", "connectionString", "value"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.auth.sasToken.connectionString.value: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.sasToken.connectionString.value: %s", err)
+		}
+	}
+}
+
+// withServicePrincipal will create the secret and service principal based on the azure environment variables
+// NOTE: Used for failure scenario only!
+func withServicePrincipal() sourceOption {
+	credsMap := map[string]interface{}{
+		"tenantID":     map[string]interface{}{"value": os.Getenv("AZURE_TENANT_ID")},
+		"clientID":     map[string]interface{}{"value": os.Getenv("AZURE_CLIENT_ID")},
+		"clientSecret": map[string]interface{}{"value": os.Getenv("AZURE_CLIENT_SECRET")},
+	}
+
+	return func(src *unstructured.Unstructured) {
+		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }
@@ -226,6 +264,6 @@ func CreateMsg(hubName, deviceName, deviceKey string) {
 	_, _ = buf.ReadFrom(resp.Body)
 
 	if err != nil || resp.StatusCode != http.StatusNoContent {
-		framework.FailfWithOffset(3, "unable to send message: %s %s", err, buf.String())
+		framework.FailfWithOffset(2, "Unable to send message: %s %s", err, buf.String())
 	}
 }

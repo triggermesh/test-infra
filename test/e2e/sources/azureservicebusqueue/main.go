@@ -100,18 +100,20 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
-		err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
-		Expect(err).ToNot(HaveOccurred())
-		queue, queueSender = createQueue(ctx, region, ns, nsClient)
 	})
 
 	Context("a source watches a servicebus queue", func() {
 		var err error // stubbed
 
 		When("an event flows", func() {
+			BeforeEach(func() {
+				rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+				nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
+				err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
+				Expect(err).ToNot(HaveOccurred())
+				queue, queueSender = createQueue(ctx, region, ns, nsClient)
+			})
+
 			It("should create an azure servicebus queue subscription", func() {
 				By("creating an event sink", func() {
 					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
@@ -154,11 +156,50 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 					Expect(data["ID"]).To(Equal(testID))
 				})
 			})
+
+			AfterEach(func() {
+				_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+			})
 		})
 	})
 
-	AfterEach(func() {
-		_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		var fakeQueueID string
+
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+
+			fakeQueueID = fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ServiceBus/namespaces/%s/queues/%s", subscriptionID, ns, ns, "fakeQueue")
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+			By("setting empty credentials", func() {
+				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
+					withSubscriptionID(subscriptionID),
+					withQueueID(fakeQueueID),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+
+			By("setting invalid queue name", func() {
+				_, err := createSource(srcClient, ns, "test-invalid-queueName", sink,
+					withSubscriptionID(subscriptionID),
+					withQueueID("fakename"),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.queueID: Invalid value: "`))
+			})
+		})
 	})
 })
 
@@ -191,7 +232,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withQueueID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "queueID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.queueID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.queueID: %s", err)
 		}
 	}
 }
@@ -199,7 +240,7 @@ func withQueueID(id string) sourceOption {
 func withSubscriptionID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "subscriptionID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.subscriptionID: %s", err)
 		}
 	}
 }
@@ -214,7 +255,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }
@@ -240,7 +281,7 @@ func readReceivedEvents(c clientset.Interface, namespace, eventDisplayName strin
 func createQueue(ctx context.Context, region string, name string, nsCli *servicebus.NamespacesClient) (*sv.QueueEntity, *sv.Queue) {
 	keys, err := nsCli.ListKeys(ctx, name, name, "RootManageSharedAccessKey")
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to obtain the connection string: %s", err)
+		framework.FailfWithOffset(2, "Unable to obtain the connection string: %s", err)
 		return nil, nil
 	}
 
@@ -248,13 +289,13 @@ func createQueue(ctx context.Context, region string, name string, nsCli *service
 	connectionString := *keys.PrimaryConnectionString + ";EntityPath=" + name
 	svNs := sv.NamespaceWithConnectionString(connectionString)
 	if svNs == nil {
-		framework.FailfWithOffset(3, "unable to configure the namespace client: %s", err)
+		framework.FailfWithOffset(2, "Unable to configure the namespace client: %s", err)
 		return nil, nil
 	}
 
 	ns, err := sv.NewNamespace(svNs)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create the namespace client: %s", err)
+		framework.FailfWithOffset(2, "Unable to create the namespace client: %s", err)
 		return nil, nil
 	}
 
@@ -262,13 +303,13 @@ func createQueue(ctx context.Context, region string, name string, nsCli *service
 
 	queue, err := tm.Put(ctx, name)
 	if err != nil {
-		framework.FailfWithOffset(3, "error creating queue: %s", err)
+		framework.FailfWithOffset(2, "Error creating queue: %s", err)
 		return nil, nil
 	}
 
 	queueSender, err := ns.NewQueue(queue.Name)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create the queue sender: %s", err)
+		framework.FailfWithOffset(2, "Unable to create the queue sender: %s", err)
 		return nil, nil
 	}
 
