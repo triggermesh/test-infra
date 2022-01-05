@@ -181,7 +181,7 @@ var _ = Describe("Azure Activity Logs", func() {
 				Expect(err.Error()).To(ContainSubstring("spec.subscriptionID: Invalid value: "))
 			})
 
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-nocreds-", sink,
 					withSubscriptionID(subscriptionID),
 					withActivityCategories([]string{"Administrative", "Policy", "Security"}),
@@ -193,7 +193,7 @@ var _ = Describe("Azure Activity Logs", func() {
 					`spec.auth: Required value`))
 			})
 
-			By("setting no destination", func() {
+			By("omitting destination", func() {
 				_, err := createSource(srcClient, ns, "test-no-eventhubs-", sink,
 					withServicePrincipal(),
 					withSubscriptionID(subscriptionID),
@@ -204,12 +204,12 @@ var _ = Describe("Azure Activity Logs", func() {
 			})
 
 			By("setting invalid eventhub namespace", func() {
-				fakeSubID := "I'm a fake subscription"
+				fakeEventhubNamespace := "I'm a fake eventhub namespace"
 				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
 					withServicePrincipal(),
 					withSubscriptionID(subscriptionID),
 					withActivityCategories([]string{"Administrative", "Policy", "Security"}),
-					withEventHubNS(createEventHubNS(fakeSubID, ns)),
+					withEventHubNS(fakeEventhubNamespace),
 					withEventHubName(ns),
 				)
 				Expect(err).To(HaveOccurred())

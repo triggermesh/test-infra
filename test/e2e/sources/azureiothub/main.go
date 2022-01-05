@@ -170,7 +170,7 @@ var _ = Describe("Azure IOT Hub Source", func() {
 		})
 
 		Specify("the API server rejects the creation of that object", func() {
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-empty-credentials", sink)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring(

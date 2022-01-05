@@ -170,8 +170,7 @@ var _ = Describe("Azure EventHubs", func() {
 		})
 
 		Specify("the API server rejects the creation of that object", func() {
-
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
 					withSubscriptionID(subscriptionID),
 					withEventHubID(createEventhubID(subscriptionID, ns)),
@@ -181,7 +180,7 @@ var _ = Describe("Azure EventHubs", func() {
 					`spec.auth: Required value`))
 			})
 
-			By("setting no eventHubID", func() {
+			By("omitting the eventHubID", func() {
 				_, err := createSource(srcClient, ns, "test-missing-eventHubID", sink,
 					withServicePrincipal(),
 					withSubscriptionID(subscriptionID),
@@ -191,12 +190,12 @@ var _ = Describe("Azure EventHubs", func() {
 				Expect(err.Error()).To(ContainSubstring(`spec.eventHubID: Required value`))
 			})
 
-			By("setting invalid eventHubID", func() {
-				fakeSubID := "I'm a fake subscription"
+			By("setting an invalid eventHubID", func() {
+				fakeEventHubID := "I'm a fake id"
 				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
 					withServicePrincipal(),
 					withSubscriptionID(subscriptionID),
-					withEventHubID(createEventhubID(fakeSubID, ns)),
+					withEventHubID(fakeEventHubID),
 				)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring(`spec.eventHubID: Invalid value: "`))

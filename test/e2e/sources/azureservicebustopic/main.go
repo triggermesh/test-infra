@@ -179,7 +179,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 		})
 
 		Specify("the API server rejects the creation of that object", func() {
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
 					withSubscriptionID(subscriptionID),
 					withTopicID(fakeTopicID),
@@ -189,7 +189,7 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 					`spec.auth: Required value`))
 			})
 
-			By("setting invalid topic name", func() {
+			By("setting an invalid topic name", func() {
 				_, err := createSource(srcClient, ns, "test-invalid-topicName", sink,
 					withSubscriptionID(subscriptionID),
 					withTopicID("fakename"),

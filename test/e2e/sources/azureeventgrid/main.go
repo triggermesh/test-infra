@@ -165,10 +165,11 @@ var _ = Describe("Azure Event Grid", func() {
 		})
 
 		Specify("the API server rejects the creation of that object", func() {
+			fakeResourceGroupName := "fakegroup"
 
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
-					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
+					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+fakeResourceGroupName),
 					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
 					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
 				)
@@ -177,7 +178,7 @@ var _ = Describe("Azure Event Grid", func() {
 					`spec.auth: Required value`))
 			})
 
-			By("setting empty scope", func() {
+			By("omitting the scope", func() {
 				_, err := createSource(srcClient, ns, "test-empty-scope", sink,
 					withServicePrincipal(),
 					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
@@ -188,10 +189,10 @@ var _ = Describe("Azure Event Grid", func() {
 					`spec.scope: Required value`))
 			})
 
-			By("setting no endpoint", func() {
+			By("omitting the eventhub endpoint", func() {
 				_, err := createSource(srcClient, ns, "test-missing-endpoint", sink,
 					withServicePrincipal(),
-					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+*rg.Name),
+					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+fakeResourceGroupName),
 					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
 				)
 
@@ -199,12 +200,12 @@ var _ = Describe("Azure Event Grid", func() {
 				Expect(err.Error()).To(ContainSubstring(`spec.endpoint: Required value`))
 			})
 
-			By("setting invalid eventhubs endpoint", func() {
-				fakeSubID := "I'm a fake subscription"
+			By("setting an invalid eventhub endpoint", func() {
+				fakeEventHubNamespace := "I'm a fake eventhub namespace"
 				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
 					withServicePrincipal(),
-					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
-					withEventHubNamespace(createEventhubID(fakeSubID, ns)),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+					withEventHubNamespace(fakeEventHubNamespace),
 				)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring(`spec.endpoint.eventHubs.namespaceID: Invalid value: "`))

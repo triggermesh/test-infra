@@ -230,7 +230,7 @@ var _ = Describe("Azure Blob Storage", func() {
 
 		Specify("the API server rejects the creation of that object", func() {
 
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
 					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
 					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
@@ -240,7 +240,7 @@ var _ = Describe("Azure Blob Storage", func() {
 					`spec.auth: Required value`))
 			})
 
-			By("setting empty storageAccountID", func() {
+			By("omitting storageAccountID", func() {
 				_, err := createSource(srcClient, ns, "test-empty-storage-id", sink,
 					withServicePrincipal(),
 					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
@@ -252,19 +252,19 @@ var _ = Describe("Azure Blob Storage", func() {
 			})
 
 			By("setting invalid storageAccountID", func() {
-				fakeSubID := "I'm a fake subscription"
+				fakeStorageAccountID := "I'm a fake storage account"
 				_, err := createSource(srcClient, ns, "test-invalid-storageAccountID", sink,
 					withServicePrincipal(),
 					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
 					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
-					withStorageAccountID(createStorageAccountID(fakeSubID, ns, saName)),
+					withStorageAccountID(fakeStorageAccountID),
 				)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring(
 					`spec.storageAccountID: Invalid value: "`))
 			})
 
-			By("setting no endpoint", func() {
+			By("omitting the eventhub endpoint", func() {
 				_, err := createSource(srcClient, ns, "test-missing-endpoint", sink,
 					withServicePrincipal(),
 					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
@@ -275,12 +275,12 @@ var _ = Describe("Azure Blob Storage", func() {
 				Expect(err.Error()).To(ContainSubstring(`spec.endpoint: Required value`))
 			})
 
-			By("setting invalid eventgrid endpoint", func() {
-				fakeSubID := "I'm a fake subscription"
+			By("setting invalid eventhub endpoint", func() {
+				fakeEventHubNamespace := "I'm a fake eventhub namespace"
 				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
 					withServicePrincipal(),
 					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
-					withEventHubNamespace(createEventhubID(fakeSubID, ns)),
+					withEventHubNamespace(fakeEventHubNamespace),
 					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
 				)
 				Expect(err).To(HaveOccurred())

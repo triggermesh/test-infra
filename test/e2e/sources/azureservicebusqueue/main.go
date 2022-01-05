@@ -180,7 +180,7 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 		})
 
 		Specify("the API server rejects the creation of that object", func() {
-			By("setting empty credentials", func() {
+			By("omitting credentials", func() {
 				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
 					withSubscriptionID(subscriptionID),
 					withQueueID(fakeQueueID),
@@ -190,7 +190,7 @@ var _ = Describe("Azure ServiceBusQueue", func() {
 					`spec.auth: Required value`))
 			})
 
-			By("setting invalid queue name", func() {
+			By("setting an invalid queue name", func() {
 				_, err := createSource(srcClient, ns, "test-invalid-queueName", sink,
 					withSubscriptionID(subscriptionID),
 					withQueueID("fakename"),
