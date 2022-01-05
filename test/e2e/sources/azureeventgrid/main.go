@@ -100,12 +100,15 @@ var _ = Describe("Azure Event Grid", func() {
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
 
-		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
 	})
 
 	Context("an Azure Event Grid source is created", func() {
 		var err error // stubbed
+
+		BeforeEach(func() {
+			rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+			_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
+		})
 
 		When("an event is produced", func() {
 			var src *unstructured.Unstructured
@@ -127,7 +130,7 @@ var _ = Describe("Azure Event Grid", func() {
 			})
 
 			It("should verify an eventgrid event was sent", func() {
-				const receiveTimeout = 30 * time.Second
+				const receiveTimeout = 60 * time.Second
 				const pollInterval = 500 * time.Millisecond
 
 				var receivedEvents []cloudevents.Event
@@ -143,10 +146,71 @@ var _ = Describe("Azure Event Grid", func() {
 				Expect(e.Source()).To(Equal("/subscriptions/" + subscriptionID + "/resourcegroups/" + *rg.Name))
 			})
 		})
+
+		AfterEach(func() {
+			_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+		})
 	})
 
-	AfterEach(func() {
-		_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+			fakeResourceGroupName := "fakegroup"
+
+			By("omitting credentials", func() {
+				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
+					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+fakeResourceGroupName),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+
+			By("omitting the scope", func() {
+				_, err := createSource(srcClient, ns, "test-empty-scope", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.scope: Required value`))
+			})
+
+			By("omitting the eventhub endpoint", func() {
+				_, err := createSource(srcClient, ns, "test-missing-endpoint", sink,
+					withServicePrincipal(),
+					withEventScope("/subscriptions/"+subscriptionID+"/resourceGroups/"+fakeResourceGroupName),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+				)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.endpoint: Required value`))
+			})
+
+			By("setting an invalid eventhub endpoint", func() {
+				fakeEventHubNamespace := "I'm a fake eventhub namespace"
+				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Resources.ResourceWriteSuccess"}),
+					withEventHubNamespace(fakeEventHubNamespace),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.endpoint.eventHubs.namespaceID: Invalid value: "`))
+			})
+		})
 	})
 })
 

@@ -99,16 +99,18 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
-		err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
-		Expect(err).ToNot(HaveOccurred())
-		topic, topicSender = createTopic(ctx, ns, e2eazure.CreateNsService(ctx, region, ns, nsClient))
 	})
 
 	Context("a source watches a servicebus topic", func() {
 		var err error // stubbed
+
+		BeforeEach(func() {
+			rg = e2eazure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+			nsClient := e2eazure.CreateServiceBusNamespaceClient(ctx, subscriptionID, ns)
+			err := e2eazure.CreateServiceBusNamespace(ctx, *nsClient, *rg.Name, ns, region)
+			Expect(err).ToNot(HaveOccurred())
+			topic, topicSender = createTopic(ctx, ns, e2eazure.CreateNsService(ctx, region, ns, nsClient))
+		})
 
 		When("an event flows", func() {
 			It("should create an azure servicebus topic subscription", func() {
@@ -154,10 +156,49 @@ var _ = Describe("Azure ServiceBusTopic", func() {
 				})
 			})
 		})
+
+		AfterEach(func() {
+			_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+		})
 	})
 
-	AfterEach(func() {
-		_ = e2eazure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		var fakeTopicID string
+
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+
+			fakeTopicID = fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ServiceBus/namespaces/%s/topics/%s", subscriptionID, ns, ns, "fakeTopic")
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+			By("omitting credentials", func() {
+				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
+					withSubscriptionID(subscriptionID),
+					withTopicID(fakeTopicID),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+
+			By("setting an invalid topic name", func() {
+				_, err := createSource(srcClient, ns, "test-invalid-topicName", sink,
+					withSubscriptionID(subscriptionID),
+					withTopicID("fakename"),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.topicID: Invalid value: "`))
+			})
+		})
 	})
 })
 
@@ -190,7 +231,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withTopicID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "topicID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.topicID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.topicID: %s", err)
 		}
 	}
 }
@@ -198,7 +239,7 @@ func withTopicID(id string) sourceOption {
 func withSubscriptionID(id string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, id, "spec", "subscriptionID"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.subscriptionID: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.subscriptionID: %s", err)
 		}
 	}
 }
@@ -213,7 +254,7 @@ func withServicePrincipal() sourceOption {
 
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedMap(src.Object, credsMap, "spec", "auth", "servicePrincipal"); err != nil {
-			framework.FailfWithOffset(3, "Failed to set spec.auth.servicePrincipal field: %s", err)
+			framework.FailfWithOffset(2, "Failed to set spec.auth.servicePrincipal field: %s", err)
 		}
 	}
 }
@@ -241,13 +282,13 @@ func createTopic(ctx context.Context, name string, ns *sv.Namespace) (*sv.TopicE
 
 	topic, err := tm.Put(ctx, name)
 	if err != nil {
-		framework.FailfWithOffset(3, "error creating topic: %s", err)
+		framework.FailfWithOffset(2, "Error creating topic: %s", err)
 		return nil, nil
 	}
 
 	topicSender, err := ns.NewTopic(topic.Name)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create the topic sender: %s", err)
+		framework.FailfWithOffset(2, "Unable to create the topic sender: %s", err)
 		return nil, nil
 	}
 

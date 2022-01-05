@@ -113,15 +113,17 @@ var _ = Describe("Azure Blob Storage", func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
 	})
 
 	Context("an Azure Blob is created and deleted ", func() {
 		var err error // stubbed
 
 		When("a blob is created and deleted", func() {
+			BeforeEach(func() {
+				rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+				_ = azure.CreateEventHubNamespaceOnly(ctx, subscriptionID, ns, region, *rg.Name)
+			})
+
 			var src *unstructured.Unstructured
 
 			BeforeEach(func() {
@@ -204,11 +206,99 @@ var _ = Describe("Azure Blob Storage", func() {
 					Expect(data["url"]).To(Equal("https://" + *sa.Name + azureBlobStorageURL + *container.Name + "/" + ns))
 				})
 			})
+
+			AfterEach(func() {
+				_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+			})
 		})
 	})
 
-	AfterEach(func() {
-		_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+
+			saName = strings.Replace(ns, "-", "", -1)
+			saName = strings.Replace(saName, "e2eazureblobstoragesource", "fakesaname", -1)
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+
+			By("omitting credentials", func() {
+				_, err := createSource(srcClient, ns, "test-empty-credentials", sink,
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+
+			By("omitting storageAccountID", func() {
+				_, err := createSource(srcClient, ns, "test-empty-storage-id", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.storageAccountID: Required value`))
+			})
+
+			By("setting invalid storageAccountID", func() {
+				fakeStorageAccountID := "I'm a fake storage account"
+				_, err := createSource(srcClient, ns, "test-invalid-storageAccountID", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+					withStorageAccountID(fakeStorageAccountID),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.storageAccountID: Invalid value: "`))
+			})
+
+			By("omitting the eventhub endpoint", func() {
+				_, err := createSource(srcClient, ns, "test-missing-endpoint", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
+					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
+				)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.endpoint: Required value`))
+			})
+
+			By("setting invalid eventhub endpoint", func() {
+				fakeEventHubNamespace := "I'm a fake eventhub namespace"
+				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
+					withServicePrincipal(),
+					withEventTypes([]string{"Microsoft.Storage.BlobCreated", "Microsoft.Storage.BlobDeleted"}),
+					withEventHubNamespace(fakeEventHubNamespace),
+					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.endpoint.eventHubs.namespaceID: Invalid value: "`))
+			})
+
+			By("setting invalid eventTypes", func() {
+				fakeEventTypes := []string{"Microsoft.EventGrid.All"}
+				_, err := createSource(srcClient, ns, "test-invalid-eventtype", sink,
+					withServicePrincipal(),
+					withEventTypes(fakeEventTypes),
+					withEventHubNamespace(createEventhubID(subscriptionID, ns)),
+					withStorageAccountID(createStorageAccountID(subscriptionID, ns, saName)),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.eventTypes: Unsupported value: "`))
+			})
+		})
 	})
 })
 
@@ -330,12 +420,12 @@ func createStorageAccount(ctx context.Context, subscriptionID, resourceGroup, na
 		},
 	}, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create storage account: %s", err)
+		framework.FailfWithOffset(2, "Unable to create storage account: %s", err)
 	}
 
 	finalResp, err := resp.PollUntilDone(ctx, time.Second*30)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create storage account: %s", err)
+		framework.FailfWithOffset(2, "Unable to create storage account: %s", err)
 	}
 
 	return finalResp.StorageAccount
@@ -344,14 +434,14 @@ func createStorageAccount(ctx context.Context, subscriptionID, resourceGroup, na
 func createBlobContainer(ctx context.Context, rg string, sa armstorage.StorageAccount, subscriptionID, name string) armstorage.BlobContainer {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(2, "Unable to authenticate: %s", err)
 	}
 
 	client := armstorage.NewBlobContainersClient(subscriptionID, cred, nil)
 
 	resp, err := client.Create(ctx, rg, *sa.Name, name, armstorage.BlobContainer{}, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to create blob container: %s", err)
+		framework.FailfWithOffset(2, "Unable to create blob container: %s", err)
 	}
 
 	return resp.BlobContainer
@@ -360,13 +450,13 @@ func createBlobContainer(ctx context.Context, rg string, sa armstorage.StorageAc
 func uploadBlob(ctx context.Context, container armstorage.BlobContainer, sa armstorage.StorageAccount, name string, data string) {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(2, "Unable to authenticate: %s", err)
 	}
 
 	url := "https://" + *sa.Name + azureBlobStorageURL + *container.Name
 	containerClient, err := azblob.NewContainerClient(url, cred, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to obtain blob client: %s", err)
+		framework.FailfWithOffset(2, "Unable to obtain blob client: %s", err)
 	}
 
 	blobClient := containerClient.NewBlockBlobClient(name)
@@ -374,26 +464,26 @@ func uploadBlob(ctx context.Context, container armstorage.BlobContainer, sa arms
 
 	_, err = blobClient.Upload(ctx, rs, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to upload payload: %s", err)
+		framework.FailfWithOffset(2, "Unable to upload payload: %s", err)
 	}
 }
 
 func deleteBlob(ctx context.Context, container armstorage.BlobContainer, sa armstorage.StorageAccount, name string) {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to authenticate: %s", err)
+		framework.FailfWithOffset(2, "Unable to authenticate: %s", err)
 	}
 
 	url := "https://" + *sa.Name + azureBlobStorageURL + *container.Name
 	containerClient, err := azblob.NewContainerClient(url, cred, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to obtain blob client: %s", err)
+		framework.FailfWithOffset(2, "Unable to obtain blob client: %s", err)
 	}
 
 	blobClient := containerClient.NewBlockBlobClient(name)
 	_, err = blobClient.Delete(ctx, nil)
 	if err != nil {
-		framework.FailfWithOffset(3, "unable to delete blob: %s", err)
+		framework.FailfWithOffset(2, "Unable to delete blob: %s", err)
 	}
 }
 

@@ -95,10 +95,6 @@ var _ = Describe("Azure Activity Logs", func() {
 		ns = f.UniqueName
 		gvr := sourceAPIVersion.WithResource(sourceResource + "s")
 		srcClient = f.DynamicClient.Resource(gvr).Namespace(ns)
-
-		rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
-		_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
-
 	})
 
 	Context("a source watches an EventHub publishing Activity Log data", func() {
@@ -106,6 +102,11 @@ var _ = Describe("Azure Activity Logs", func() {
 		var testRG armresources.ResourceGroup
 
 		When("an event flows", func() {
+			BeforeEach(func() {
+				rg = azure.CreateResourceGroup(ctx, subscriptionID, ns, region)
+				_ = azure.CreateEventHubComponents(ctx, subscriptionID, ns, region, *rg.Name)
+			})
+
 			It("should create an azure eventhub", func() {
 				By("creating an event sink", func() {
 					sink = bridges.CreateEventDisplaySink(f.KubeClient, ns)
@@ -145,11 +146,88 @@ var _ = Describe("Azure Activity Logs", func() {
 					Expect(receivedEvents).ToNot(BeEmpty()) // In some cases will receive either 1 or 2 events
 				})
 			})
+
+			AfterEach(func() {
+				_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+			})
 		})
 	})
 
-	AfterEach(func() {
-		_ = azure.DeleteResourceGroup(ctx, subscriptionID, *rg.Name)
+	When("a client creates a source object with invalid specs", func() {
+		// Those tests do not require a real sink
+		BeforeEach(func() {
+			sink = &duckv1.Destination{
+				Ref: &duckv1.KReference{
+					APIVersion: "fake/v1",
+					Kind:       "Fake",
+					Name:       "fake",
+				},
+			}
+		})
+
+		Specify("the API server rejects the creation of that object", func() {
+
+			By("setting an invalid subscriptionID", func() {
+				fakeSubID := "I'm a fake subscription"
+
+				_, err := createSource(srcClient, ns, "test-invalid-sub-id", sink,
+					withServicePrincipal(),
+					withSubscriptionID(fakeSubID),
+					withActivityCategories([]string{"Administrative", "Policy", "Security"}),
+					withEventHubNS(createEventHubNS(subscriptionID, ns)),
+					withEventHubName(ns),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("spec.subscriptionID: Invalid value: "))
+			})
+
+			By("omitting credentials", func() {
+				_, err := createSource(srcClient, ns, "test-nocreds-", sink,
+					withSubscriptionID(subscriptionID),
+					withActivityCategories([]string{"Administrative", "Policy", "Security"}),
+					withEventHubNS(createEventHubNS(subscriptionID, ns)),
+					withEventHubName(ns),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(
+					`spec.auth: Required value`))
+			})
+
+			By("omitting destination", func() {
+				_, err := createSource(srcClient, ns, "test-no-eventhubs-", sink,
+					withServicePrincipal(),
+					withSubscriptionID(subscriptionID),
+					withActivityCategories([]string{"Administrative", "Policy", "Security"}),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.destination: Required value`))
+			})
+
+			By("setting invalid eventhub namespace", func() {
+				fakeEventhubNamespace := "I'm a fake eventhub namespace"
+				_, err := createSource(srcClient, ns, "test-invalid-eventhub-ns", sink,
+					withServicePrincipal(),
+					withSubscriptionID(subscriptionID),
+					withActivityCategories([]string{"Administrative", "Policy", "Security"}),
+					withEventHubNS(fakeEventhubNamespace),
+					withEventHubName(ns),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.destination.eventHubs.namespaceID: Invalid value: "`))
+			})
+
+			By("setting invalid eventhub name", func() {
+				fakeName := "I'm a fake name"
+				_, err := createSource(srcClient, ns, "test-invalid-eventhub-name", sink,
+					withServicePrincipal(),
+					withSubscriptionID(subscriptionID),
+					withEventHubNS(createEventHubNS(subscriptionID, ns)),
+					withEventHubName(fakeName),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`spec.destination.eventHubs.hubName: Invalid value: "`))
+			})
+		})
 	})
 })
 
