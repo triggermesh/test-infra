@@ -196,7 +196,7 @@ var _ = Describe("Azure Queue Storage", func() {
 
 type sourceOption func(*unstructured.Unstructured)
 
-// createSource creates an AzureEventHubSource object initialized with the test parameters
+// createSource creates an AzureQueueStorageSource object initialized with the test parameters
 func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix string,
 	sink *duckv1.Destination, opts ...sourceOption) (*unstructured.Unstructured, error) {
 	src := &unstructured.Unstructured{}
@@ -223,7 +223,7 @@ func createSource(srcClient dynamic.ResourceInterface, namespace, namePrefix str
 func withAccountName(accountName string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, accountName, "spec", "accountName"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.accountName: %s", err)
+			framework.FailfWithOffset(2, "failed to set spec.accountName: %s", err)
 		}
 	}
 }
@@ -231,7 +231,7 @@ func withAccountName(accountName string) sourceOption {
 func withQueueName(queueName string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, queueName, "spec", "queueName"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.queueName: %s", err)
+			framework.FailfWithOffset(2, "failed to set spec.queueName: %s", err)
 		}
 	}
 }
@@ -239,7 +239,7 @@ func withQueueName(queueName string) sourceOption {
 func withAccountKey(accountKey string) sourceOption {
 	return func(src *unstructured.Unstructured) {
 		if err := unstructured.SetNestedField(src.Object, accountKey, "spec", "accountKey", "value"); err != nil {
-			framework.FailfWithOffset(3, "failed to set spec.accountKey.value: %s", err)
+			framework.FailfWithOffset(2, "failed to set spec.accountKey.value: %s", err)
 		}
 	}
 }
